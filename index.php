@@ -223,8 +223,8 @@ $glyphs = $stmt->fetchAll();
                     engineSeed = engineSeed - 4294967296; 
                 }
 
-                // Update UI display
-                seedBox.innerText = engineSeed;
+                updateSeedUI(engineSeed, btn, seedBox);
+                // seedBox.innerText = engineSeed;
                 
                 statusBadge.innerText = "TIMELINE LOCKED";
                 statusBadge.style.background = "rgba(66, 244, 133, 0.2)";
@@ -246,7 +246,8 @@ $glyphs = $stmt->fetchAll();
                     engineSeed = engineSeed - 4294967296;
                 }
                 
-                seedBox.innerText = engineSeed;
+                updateSeedUI(engineSeed, btn, seedBox);
+                //seedBox.innerText = engineSeed;
                 statusBadge.innerText = "PRUNED FALLBACK";
                 statusBadge.style.background = "rgba(244, 66, 66, 0.2)";
                 statusBadge.style.color = "#f44242";
@@ -255,6 +256,53 @@ $glyphs = $stmt->fetchAll();
                 btn.innerText = "Harvest NIST Pulse";
             });
     });
+
+    function updateSeedUI(engineSeed, btn, seedBox) {
+        // --- COOL NUMBER CYCLING ANIMATION LAYER ---
+        const targetStr = engineSeed.toString();
+        const totalDuration = 1500; // Total animation time in ms
+        const frameRate = 40;       // Speed of the cycling shuffle in ms
+        const cyclesPerChar = Math.floor(totalDuration / frameRate);
+        let frame = 0;
+
+        // Clear any existing intervals if the user clicks rapidly
+        if (btn.animationInterval) clearInterval(btn.animationInterval);
+
+        btn.animationInterval = setInterval(() => {
+            let currentDisplay = "";
+
+            for (let i = 0; i < targetStr.length; i++) {
+                // If the character is a minus sign, keep it stable
+                if (targetStr[i] === '-') {
+                    currentDisplay += '-';
+                    continue;
+                }
+
+                // Determine if this specific digit should be locked yet
+                const lockThreshold = (totalDuration / targetStr.length) * i;
+                const currentProgress = frame * frameRate;
+
+                if (currentProgress >= lockThreshold) {
+                    // Reveal the actual true digit
+                    currentDisplay += targetStr[i];
+                } else {
+                    // Cycle through a random digit
+                    currentDisplay += Math.floor(Math.random() * 10).toString();
+                }
+            }
+
+            seedBox.innerText = currentDisplay;
+            frame++;
+
+            // When the final frame is reached, force absolute accuracy and clear the loop
+            if (frame >= cyclesPerChar) {
+                clearInterval(btn.animationInterval);
+                seedBox.innerText = targetStr; // Absolute fallback safety match
+            }
+        }, frameRate);
+        // --- END ANIMATION LAYER ---
+    }
+
 </script>
 </body>
 </html>
