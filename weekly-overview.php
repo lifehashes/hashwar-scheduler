@@ -162,10 +162,10 @@ error_reporting(E_ALL);
 
         <?php 
         $rrDays = [
-            'MONDAY'    => ['CYCLE_01', 'RR: Openings', 'Initial matrix loops activate to compile base states.'],
-            'TUESDAY'   => ['CYCLE_02', 'RR: Acceleration', 'Standings solidify over heavy computing blocks.'],
-            'WEDNESDAY' => ['CYCLE_03', 'RR: High Entropy', 'Critical point-margin deltas build across columns.'],
-            'THURSDAY'  => ['RESOLVE',  'RR: Final Standings', 'Group finalization. Top 3 advance, 4-7 drop to Friday.']
+            'MONDAY'    => ['GROUP A', 'RR: Openings', 'Initial matrix loops activate to compile base states.'],
+            'TUESDAY'   => ['GROUP B', 'RR: Acceleration', 'Standings solidify over heavy computing blocks.'],
+            'WEDNESDAY' => ['GROUP C', 'RR: High Entropy', 'Critical point-margin deltas build across columns.'],
+            'THURSDAY'  => ['GROUP D',  'RR: Final Standings', 'Group finalization. Top 3 advance, 4-7 drop to Friday.']
         ];
         foreach ($rrDays as $dayName => $info): 
         ?>
@@ -195,6 +195,8 @@ error_reporting(E_ALL);
                         <tr class="row-advance"><td>03. GAMMA</td><td style="text-align:right;">--</td></tr>
                         <tr class="row-redemption"><td>04. DELTA</td><td style="text-align:right;">--</td></tr>
                         <tr class="row-redemption"><td>05. EPSILON</td><td style="text-align:right;">--</td></tr>
+                        <tr class="row-redemption"><td>06. ZETA</td><td style="text-align:right;">--</td></tr>
+                        <tr class="row-redemption"><td>75. ETA</td><td style="text-align:right;">--</td></tr>
                         <tr class="row-pruned"><td>08. OMEGA</td><td style="text-align:right;">--</td></tr>
                     </tbody>
                 </table>
