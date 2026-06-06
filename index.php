@@ -120,7 +120,7 @@ $glyphs = $stmt->fetchAll();
 
 <div class="outer-frame">
     <div class="stat-line" style="border-bottom: 1px solid var(--frame-grey); padding-bottom: 5px; margin-bottom: 20px;">
-        <span style="font-weight: bold; letter-spacing: 2px;">BUREAU OF ENTROPY // OVERSEER</span>
+        <span style="font-weight: bold; letter-spacing: 2px;">BUREAU OF ENTROPY // OVERSEER NODE</span>
         <span id="clock-readout">SYSTEM EPOCH: LOADING...</span>
     </div>
 
@@ -199,9 +199,9 @@ $glyphs = $stmt->fetchAll();
         statusBadge.style.color = "#f4d042";
 
         // Poll the live NIST Randomness Beacon via its official time API endpoint
-        const currentTimestamp = Math.floor(Date.now() / 1000);
+        const currentTimestamp = Date.now();
         
-        fetch(`https://beacon.nist.gov/beacon/2.0/pulse/last`)
+        fetch(`https://beacon.nist.gov/beacon/2.0/pulse/time/previous/${currentTimestamp}`)
             .then(response => {
                 if(!response.ok) throw new Error("Network latency in the Sacred Timeline.");
                 return response.json();
@@ -233,7 +233,7 @@ $glyphs = $stmt->fetchAll();
                 btn.disabled = false;
                 btn.innerText = "Harvest NIST Pulse";
 
-                console.log(`[THE OVERSEER] NIST Full Hex for Pulse ID ${pulseIndex}: ${rawHex} -> Compression Stage: FNV-1a Hash -> INT(11) Signed Seed: ${engineSeed}`);
+                console.log(`[THE OVERSEER] Input timestamp ${currentTimestamp} -> NIST Full Hex for Pulse ID ${pulseIndex}: ${rawHex} -> Compression Stage: FNV-1a Hash -> INT(11) Signed Seed: ${engineSeed}`);
             })
             .catch(error => {
                 console.warn(error);
