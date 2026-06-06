@@ -94,3 +94,17 @@ var sha256 = function sha256(ascii) {
 	}
 	return result;
 };
+
+/**
+ * 32-bit FNV-1a Non-Cryptographic Hash Function
+ * --> generates a uniformly distributed unsigned 32-bit integer from the input string
+ */
+function fnv1a32(str) {
+	let hash = 0x811c9dc5; // FNV-1a 32-bit offset basis
+	for (let i = 0; i < str.length; i++) {
+		hash ^= str.charCodeAt(i);
+		// Equivalent to mathematical: hash = (hash * 0x01000193) safely bounded to 32-bit space via bitwise operations
+		hash = Math.imul(hash, 0x01000193);
+	}
+	return hash >>> 0;
+}

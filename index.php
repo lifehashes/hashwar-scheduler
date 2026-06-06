@@ -12,7 +12,7 @@ $glyphs = $stmt->fetchAll();
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HASHWAR-SCHEDULER :: v100</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="js/sha256.js"></script>  
+    <script src="js/hashing.js"></script>  
     <style>
         /* Incremental layout adjustments extending your engine styles */
         .overseer-grid {
@@ -120,7 +120,7 @@ $glyphs = $stmt->fetchAll();
 
 <div class="outer-frame">
     <div class="stat-line" style="border-bottom: 1px solid var(--frame-grey); padding-bottom: 5px; margin-bottom: 20px;">
-        <span style="font-weight: bold; letter-spacing: 2px;">BUREAU OF ENTROPY // THE OVERSEER</span>
+        <span style="font-weight: bold; letter-spacing: 2px;">BUREAU OF ENTROPY // OVERSEER</span>
         <span id="clock-readout">SYSTEM EPOCH: LOADING...</span>
     </div>
 
@@ -128,7 +128,7 @@ $glyphs = $stmt->fetchAll();
         
         <div>
             <div class="panel-header" style="background: var(--panel-bg); padding: 10px 15px; border: 1px solid rgba(255,255,255,0.05); border-bottom: none; margin-bottom: 0;">
-                <span>Registered Gladiators (<?php echo count($glyphs); ?> total)</span>
+                <span>Registered Conway Glyphs (<?php echo count($glyphs); ?> total)</span>
                 <span style="font-size: 0.7rem; color: #888;">ORDER: BATTLE_NAME ASC</span>
             </div>
             <div class="roster-container">
@@ -155,16 +155,16 @@ $glyphs = $stmt->fetchAll();
             </h2>
             
             <p style="font-size: 0.75rem; color: #aaa; line-height: 1.4;">
-                Poll the external cryptographic anchor. Capturing a 512-bit raw hex variant pulse from the NIST Randomness Beacon and coercing it to an immutable, auditable <text style="color: var(--accent-green);">INT(11)</text> engine seed.
+                All hail to the <text style="color: var(--accent-green);">National Institute for Standards and Technology</text>!
             </p>
 
             <h3 style="font-size: 0.8rem; margin-bottom: 5px; text-transform: uppercase; color: var(--frame-grey);">NIST Pulse Output:</h3>
             <div class="seed-display-box" id="raw-pulse-box">AWAITING QUANTUM HARVEST...</div>
 
-            <h3 style="font-size: 0.8rem; margin-bottom: 5px; text-transform: uppercase; color: var(--frame-grey);">Coerced Engine Seed:</h3>
+            <h3 style="font-size: 0.8rem; margin-bottom: 5px; text-transform: uppercase; color: var(--frame-grey);">Compressed Engine Seed (FNV-1a 32-bit):</h3>
             <div class="seed-display-box" id="coerced-seed-box" style="font-size: 1.2rem; text-align: center; color: var(--accent-green); font-weight: bold;">0000000000</div>
 
-            <button class="action-button" id="prune-timeline-btn">Harvest NIST Pulse</button>
+            <button class="action-button" id="prune-timeline-btn">Retrieve NIST Pulse</button>
 
             <div style="margin-top: 30px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 20px;">
                 <h3 style="font-size: 0.8rem; margin-bottom: 10px; text-transform: uppercase; color: var(--accent-green);">Broadcast Overlays</h3>
@@ -201,8 +201,7 @@ $glyphs = $stmt->fetchAll();
         // Poll the live NIST Randomness Beacon via its official time API endpoint
         const currentTimestamp = Math.floor(Date.now() / 1000);
         
-        // Using a public proxy fallback if standard CORS restrictions intercept native browser requests
-        fetch(`https://beacon.nist.gov/beacon/2.0/pulse/time/${currentTimestamp}`)
+        fetch(`https://beacon.nist.gov/beacon/2.0/pulse/last`)
             .then(response => {
                 if(!response.ok) throw new Error("Network latency in the Sacred Timeline.");
                 return response.json();
@@ -212,12 +211,17 @@ $glyphs = $stmt->fetchAll();
                 const rawHex = data.pulse.outputValue;
                 pulseBox.innerText = rawHex;
 
-                // CRITICAL CORNERSTONE: 
-                // Slice exactly the first 7 hexadecimal characters. 
-                // 7 hex chars max out at 0xFFFFFFF (268,435,455 decimal), 
-                // matching seamlessly and cleanly inside the INT(11) signed limit of 2,147,483,647.
-                const hexSlice = rawHex.substring(0, 7);
-                const engineSeed = parseInt(hexSlice, 16);
+                const pulseIndex = data.pulse.pulseIndex;
+
+                // Compress the 512-bit hex string by hashing and mapping it deterministically to 32-bit int
+                let engineSeed = fnv1a32(rawHex);
+
+                // MySQL signed INT(11) upper limit safeguard: 2,147,483,647.
+                // If our unsigned bit shift pushed past this limit, we map it into signed territory,
+                // or safely modulo/clamp it so your database never chokes on insertion.
+                if (engineSeed > 2147483647) {
+                    engineSeed = engineSeed - 4294967296; 
+                }
 
                 // Update UI display
                 seedBox.innerText = engineSeed;
@@ -229,7 +233,7 @@ $glyphs = $stmt->fetchAll();
                 btn.disabled = false;
                 btn.innerText = "Harvest NIST Pulse";
 
-                console.log(`[THE OVERSEER] NIST Hex: ${rawHex} -> Slice: ${hexSlice} -> INT(11) Seed: ${engineSeed}`);
+                console.log(`[THE OVERSEER] NIST Full Hex for Pulse ID ${pulseIndex}: ${rawHex} -> Compression Stage: FNV-1a Hash -> INT(11) Signed Seed: ${engineSeed}`);
             })
             .catch(error => {
                 console.warn(error);
@@ -237,8 +241,10 @@ $glyphs = $stmt->fetchAll();
                 const localFallbackHex = crypto.subtle ? 'A576F821B000CD91BFA3C672B10906BC' : 'DEADBEEF101010101010101010101010';
                 pulseBox.innerText = localFallbackHex + " [LOCAL TIMELINE FALLBACK]";
                 
-                const hexSlice = localFallbackHex.substring(0, 7);
-                const engineSeed = parseInt(hexSlice, 16);
+                let engineSeed = fnv1a32(localFallbackHex);
+                if (engineSeed > 2147483647) {
+                    engineSeed = engineSeed - 4294967296;
+                }
                 
                 seedBox.innerText = engineSeed;
                 statusBadge.innerText = "PRUNED FALLBACK";
