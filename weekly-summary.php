@@ -1,6 +1,6 @@
 <?php
 // Include your database configuration when you are ready to pull live states
-// include_once __DIR__ . '/../../priv/db_conf_laniakea.php';
+include_once __DIR__ . '/../../priv/db_conf_laniakea.php';
 
 /**
  * HASHWAR WEEKLY SERIES OVERVIEW TEMPLATE
@@ -10,6 +10,43 @@
  * - Friday: Redemption Day (4 Parallel Knock-out Brackets -> 4 Final Spots)
  * - Saturday: Weekly Finale (16-Contestant Knock-out Bracket)
  */
+
+// Fetch the series_participants list (debugging)
+/*
+$series_id = isset($_GET['series_id']) && is_numeric($_GET['series_id']) ? (int)$_GET['series_id'] : null;
+if ($series_id){
+    $query = $pdo->prepare("SELECT * FROM series_participants WHERE series_id = ?");
+    $query->execute([$series_id]);
+    $seriesData = $query->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    // no parameter provided
+}
+*/
+
+// Fetch the current series stats
+$series_id = isset($_GET['series_id']) && is_numeric($_GET['series_id']) ? (int)$_GET['series_id'] : null;
+if ($series_id){
+    $query = $pdo->prepare("SELECT 
+    sp.glyph_name, sp.group_label, 
+    SUM(
+        CASE 
+            WHEN m.p1_glyph_name = sp.glyph_name THEN mr.p1_final_score 
+            WHEN m.p2_glyph_name = sp.glyph_name THEN mr.p2_final_score 
+            ELSE 0 
+        END
+    ) AS total_score
+FROM series_participants sp
+JOIN matches m ON sp.tournament_id = m.tournament_id 
+    AND (sp.glyph_name = m.p1_glyph_name OR sp.glyph_name = m.p2_glyph_name)
+JOIN match_rounds mr ON m.id = mr.match_id
+WHERE sp.series_id = ?
+GROUP BY sp.glyph_name
+ORDER BY sp.group_label, total_score DESC;");
+    $query->execute([$series_id]);
+    $seriesData = $query->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    // no parameter provided
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -384,6 +421,9 @@
 </div>
 
 <script>
+
+    document.addEventListener('DOMContentLoaded', getSeriesData);
+
     // System Clock Synchronizer
     function updateClock() {
         const now = new Date();
@@ -391,6 +431,107 @@
     }
     setInterval(updateClock, 1000);
     updateClock();
+
+    /*
+    function populateLeaderboards(data) {
+        // 1. Clear existing placeholders (optional, keeps it clean)
+        document.querySelectorAll('.group-table tbody').forEach(tbody => {
+            tbody.innerHTML = '';
+        });
+
+        // 2. Iterate through data and append rows
+        data.forEach((contestant, index) => {
+            const groupLetter = contestant.group_label;
+            const tbody = document.querySelector(`#group-${groupLetter} .group-table tbody`);
+            
+            if (tbody) {
+                // Determine row style based on rank (1-3: advance, 4-7: redemption, 8: pruned)
+                // Note: index calculation might need adjustment depending on how you sort your groups
+                let rowClass = 'row-pruned';
+                const rank = tbody.children.length + 1;
+                
+                if (rank <= 3) rowClass = 'row-advance';
+                else if (rank <= 7) rowClass = 'row-redemption';
+
+                // Create row HTML
+                const row = document.createElement('tr');
+                row.className = rowClass;
+                row.innerHTML = `
+                    <td>0${rank}</td>
+                    <td>${contestant.glyph_name}</td>
+                    <td style="text-align: right;" class="stat-val">${contestant.total_score}</td>
+                `;
+                tbody.appendChild(row);
+            }
+        });
+    }
+    */
+
+    function populateTournament(data) {
+        // 1. Clear previous data in tables and reset slot text
+        document.querySelectorAll('.group-table tbody').forEach(el => el.innerHTML = '');
+        
+        // Clear only the content inside .matchup-slot, keeping the spans
+        document.querySelectorAll('.matchup-card .matchup-slot').forEach(el => {
+            if (!el.parentElement.querySelector('.match-meta')) {
+                el.innerHTML = '<span>--</span><span class="score">--</span>';
+            }
+        });
+
+        // 2. Process data by group
+        const groups = { 'A': [], 'B': [], 'C': [], 'D': [] };
+        data.forEach(p => groups[p.group_label]?.push(p));
+
+        Object.keys(groups).forEach(groupLetter => {
+            const contestants = groups[groupLetter];
+            const tbody = document.querySelector(`#group-${groupLetter} .group-table tbody`);
+
+            contestants.forEach((p, idx) => {
+                const rank = idx + 1;
+                
+                // Populate Group Table
+                if (tbody) {
+                    const rowClass = rank <= 3 ? 'row-advance' : (rank <= 7 ? 'row-redemption' : 'row-pruned');
+                    tbody.insertAdjacentHTML('beforeend', `
+                        <tr class="${rowClass}">
+                            <td>0${rank}</td><td>${p.glyph_name}</td>
+                            <td style="text-align: right;">${p.total_score}</td>
+                        </tr>
+                    `);
+                }
+
+                // Populate Redemption Brackets (Ranks 4-7)
+                if (rank >= 4 && rank <= 7) {
+                    // Find all slots in the specific group's redemption bracket
+                    // Rank 4 is index 0, 7 is index 1, 5 is index 2, 6 is index 3
+                    const slotMap = { 4: 0, 7: 1, 5: 2, 6: 3 };
+                    const slots = document.querySelectorAll(`div[id="group-${groupLetter}"] ~ div .matchup-slot`);
+                    
+                    // We target the redemption bracket by searching for the group container 
+                    // in the second section (Phase II)
+                    const targetSlot = document.querySelectorAll(`div[style*="border-color: rgba(244, 208, 66, 0.2)"]`)[
+                        groupLetter.charCodeAt(0) - 65
+                    ]?.querySelectorAll('.matchup-slot')[slotMap[rank]];
+
+                    if (targetSlot) {
+                        targetSlot.innerHTML = `<span>${rank}${rank === 4 ? 'th' : rank === 5 ? 'th' : rank === 6 ? 'th' : 'th'}: ${p.glyph_name}</span><span class="score">${p.total_score}</span>`;
+                    }
+                }
+            });
+        });
+    }
+
+    function getSeriesData(){
+
+        const currentSeriesData = <?php echo json_encode($seriesData); ?>;
+        console.log("[weekly-overview.php] getSeriesData(): data = ");
+        console.table(currentSeriesData);
+
+        // populateLeaderboards(currentSeriesData);
+        populateTournament(currentSeriesData);
+
+    }
+
 </script>
 </body>
 </html>
