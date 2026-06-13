@@ -660,50 +660,82 @@ $glyphs = $stmt->fetchAll();
 
         if (status !== 'LOCKED' || eligibleGlyphs.length < 32) return;
 
-        // 1. Initialize Seeded PRNG and Shuffle
+        // 1. Initialize seeded PRNG and shuffle
         const rng = seededRandom(engineSeed);
         for (let i = eligibleGlyphs.length - 1; i > 0; i--) {
             const j = Math.floor(rng() * (i + 1));
             [eligibleGlyphs[i], eligibleGlyphs[j]] = [eligibleGlyphs[j], eligibleGlyphs[i]];
         }
+        // console.log("[weekly-overview.php] executeRndDraw(): Number of elligible Glyphs to draw from: " + eligibleGlyphs.length);
 
-        console.log("[weekly-overview.php] executeRndDraw(): Number of elligible Glyphs to draw from: " + eligibleGlyphs.length);
-
+        // 2. Assign shuffled deck to groups
         const finalSet = eligibleGlyphs.slice(0, 32);
-        console.log("[weekly-overview.php] executeRndDraw(): Final set of Glyphs: " + finalSet.length);
-
+        // console.log("[weekly-overview.php] executeRndDraw(): Final set of Glyphs: " + finalSet.length);
         const groups = {
             'MONDAY': finalSet.slice(0, 8),
             'TUESDAY': finalSet.slice(8, 16),
             'WEDNESDAY': finalSet.slice(16, 24),
             'THURSDAY': finalSet.slice(24, 32)
         };
-
         console.log("[weekly-overview.php] executeRndDraw(): Assignment complete:", groups);
 
-        // 4. Now animate using the 'groups' object
-        const dayKeys = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY'];
-        const modal = document.getElementById('draw-modal');
-        modal.style.display = 'block';
+        // 3a. Create a simplified package
+        const labels = ['A', 'B', 'C', 'D'];
+        const groupSize = 8; // Based on your logic of 32 glyphs / 4 groups
+        const simplifiedPackage = [];
 
-        // Iterate through each day/column
-        for (const day of dayKeys) {
-            const col = document.getElementById(`col-${day}`); // Use the 'day' directly
+        labels.forEach((label, index) => {
+            const start = index * groupSize;
+            const end = start + groupSize;
+            const groupGlyphs = finalSet.slice(start, end);
             
-            // Iterate through the 8 glyphs assigned to that specific day
-            for (const glyph of groups[day]) {
-                const clone = glyph.cloneNode(true);
-                clone.style.opacity = '0';
-                col.appendChild(clone);
-                
-                await new Promise(r => setTimeout(r, 50));
-                clone.style.transition = 'opacity 0.3s';
-                clone.style.opacity = '1';
-            }
-        }
+            groupGlyphs.forEach(glyph => {
+                simplifiedPackage.push({
+                    name: glyph.querySelector('h3').innerText,
+                    group: label // This will now be 'A', 'B', 'C', or 'D'
+                });
+            });
+        });
 
-        console.log("[RND DRAW] Assignment complete:", groups);
-        return groups;
+        // 3b. Save package to database
+        console.log("Saving to database...");        
+        const response = await fetch('php/save-draw.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ participants: simplifiedPackage })
+        });
+
+        const result = await response.json();
+        if (result.status === 'success') {
+            // alert('Draw saved! Series ID: ' + result.series_id);
+
+            // 4. Now animate using the 'groups' object
+            const dayKeys = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY'];
+            const modal = document.getElementById('draw-modal');
+            modal.style.display = 'block';
+
+            // Iterate through each day/column
+            for (const day of dayKeys) {
+                const col = document.getElementById(`col-${day}`); // Use the 'day' directly
+                
+                // Iterate through the 8 glyphs assigned to that specific day
+                for (const glyph of groups[day]) {
+                    const clone = glyph.cloneNode(true);
+                    clone.style.opacity = '0';
+                    col.appendChild(clone);
+                    
+                    await new Promise(r => setTimeout(r, 50));
+                    clone.style.transition = 'opacity 0.3s';
+                    clone.style.opacity = '1';
+                }
+            }
+
+            console.log("[RND DRAW] Assignment complete:", groups);
+            return groups;
+
+        } else {
+            console.error('Failed to save draw:', result.message);
+        }
 
     }
     
