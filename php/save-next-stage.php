@@ -14,9 +14,11 @@ try {
     $pdo->beginTransaction();
 
     // 1. Insert new entry into 'series'
+    /*
     $stmt = $pdo->prepare("INSERT INTO series (designation, type) VALUES (?, ?)");
     $stmt->execute(['Weekly Series ' . date('Y-m-d'), 'WEEKLY']);
     $seriesId = $pdo->lastInsertId();
+    */
 
     // 2. Map glyphs to 'series_participants'
     $stmt = $pdo->prepare("INSERT INTO series_participants 
@@ -25,7 +27,7 @@ try {
 
     foreach ($data['participants'] as $p) {
         $stmt->execute([
-            $seriesId, 
+            $data['series'], 
             0,               // this is the 'dummy' tournament entry - it will be updated later by the hashwar engine
             $p['name'],      // glyph_name
             $p['group'],     // group_label (A-D)

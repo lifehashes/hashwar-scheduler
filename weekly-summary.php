@@ -11,18 +11,6 @@ include_once __DIR__ . '/../../priv/db_conf_laniakea.php';
  * - Saturday: Weekly Finale (16-Contestant Knock-out Bracket)
  */
 
-// Fetch the series_participants list (debugging)
-/*
-$series_id = isset($_GET['series_id']) && is_numeric($_GET['series_id']) ? (int)$_GET['series_id'] : null;
-if ($series_id){
-    $query = $pdo->prepare("SELECT * FROM series_participants WHERE series_id = ?");
-    $query->execute([$series_id]);
-    $seriesData = $query->fetchAll(PDO::FETCH_ASSOC);
-} else {
-    // no parameter provided
-}
-*/
-
 // Fetch the current series stats
 $series_id = isset($_GET['series_id']) && is_numeric($_GET['series_id']) ? (int)$_GET['series_id'] : null;
 if ($series_id){
@@ -432,41 +420,6 @@ ORDER BY sp.group_label, total_score DESC;");
     setInterval(updateClock, 1000);
     updateClock();
 
-    /*
-    function populateLeaderboards(data) {
-        // 1. Clear existing placeholders (optional, keeps it clean)
-        document.querySelectorAll('.group-table tbody').forEach(tbody => {
-            tbody.innerHTML = '';
-        });
-
-        // 2. Iterate through data and append rows
-        data.forEach((contestant, index) => {
-            const groupLetter = contestant.group_label;
-            const tbody = document.querySelector(`#group-${groupLetter} .group-table tbody`);
-            
-            if (tbody) {
-                // Determine row style based on rank (1-3: advance, 4-7: redemption, 8: pruned)
-                // Note: index calculation might need adjustment depending on how you sort your groups
-                let rowClass = 'row-pruned';
-                const rank = tbody.children.length + 1;
-                
-                if (rank <= 3) rowClass = 'row-advance';
-                else if (rank <= 7) rowClass = 'row-redemption';
-
-                // Create row HTML
-                const row = document.createElement('tr');
-                row.className = rowClass;
-                row.innerHTML = `
-                    <td>0${rank}</td>
-                    <td>${contestant.glyph_name}</td>
-                    <td style="text-align: right;" class="stat-val">${contestant.total_score}</td>
-                `;
-                tbody.appendChild(row);
-            }
-        });
-    }
-    */
-
     function populateTournament(data) {
         // 1. Clear previous data in tables and reset slot text
         document.querySelectorAll('.group-table tbody').forEach(el => el.innerHTML = '');
@@ -524,11 +477,57 @@ ORDER BY sp.group_label, total_score DESC;");
     function getSeriesData(){
 
         const currentSeriesData = <?php echo json_encode($seriesData); ?>;
-        console.log("[weekly-overview.php] getSeriesData(): data = ");
+        console.log("[weekly-summary.php] getSeriesData(): data = ");
         console.table(currentSeriesData);
 
         // populateLeaderboards(currentSeriesData);
         populateTournament(currentSeriesData);
+        saveNextStage(currentSeriesData);
+
+    }
+
+    async function saveNextStage(data){       
+
+        let truncData = [];
+
+        for (let j = 0; j < 4; j++){
+
+            // 'special' mapping for input to the KO tourney... duh
+            truncData.push(data[3 + j*8]);
+            truncData.push(data[6 + j*8]);
+            truncData.push(data[4 + j*8]);
+            truncData.push(data[5 + j*8]);
+
+        }
+
+        //console.log("[weekly-summary.php] saveNextStage(): truncData = ");
+        //console.table(truncData);
+
+        let myPayload = [];
+
+        truncData.forEach((row) => {
+            myPayload.push({
+                name: row.glyph_name,
+                group: row.group_label,
+                phase: 2
+            });
+        });
+
+        //console.log("[weekly-summary.php] saveNextStage(): myPayload = ");
+        //console.table(myPayload);
+        
+        const queryParameter = window.location.search;
+        const urlParameters = new URLSearchParams(queryParameter);
+        const seriesId = urlParameters.get('series_id');
+        console.log("[weekly-summary.php] saveNextStage(): seriesId = " + seriesId);
+
+        const response = await fetch('php/save-next-stage.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ participants: myPayload, series: seriesId })
+        });
+
+        console.log("[weekly-summary.php] saveNextStage(): Saving to database... Done.");
 
     }
 

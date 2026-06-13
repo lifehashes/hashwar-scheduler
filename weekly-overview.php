@@ -692,7 +692,8 @@ $glyphs = $stmt->fetchAll();
             groupGlyphs.forEach(glyph => {
                 simplifiedPackage.push({
                     name: glyph.querySelector('h3').innerText,
-                    group: label // This will now be 'A', 'B', 'C', or 'D'
+                    group: label, // This will now be 'A', 'B', 'C', or 'D'
+                    phase: 1
                 });
             });
         });
@@ -730,7 +731,7 @@ $glyphs = $stmt->fetchAll();
                 }
             }
 
-            console.log("[RND DRAW] Assignment complete:", groups);
+            // console.log("[RND DRAW] Assignment complete:", groups);
             return groups;
 
         } else {
