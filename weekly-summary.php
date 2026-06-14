@@ -11,7 +11,7 @@ include_once __DIR__ . '/../../priv/db_conf_laniakea.php';
  * - Saturday: Weekly Finale (16-Contestant Knock-out Bracket)
  */
 
-// Fetch the current series stats
+// Fetch the current series stats for phase 1
 $series_id = isset($_GET['series_id']) && is_numeric($_GET['series_id']) ? (int)$_GET['series_id'] : null;
 if ($series_id){
     $query = $pdo->prepare("SELECT 
@@ -27,7 +27,7 @@ FROM series_participants sp
 JOIN matches m ON sp.tournament_id = m.tournament_id 
     AND (sp.glyph_name = m.p1_glyph_name OR sp.glyph_name = m.p2_glyph_name)
 JOIN match_rounds mr ON m.id = mr.match_id
-WHERE sp.series_id = ?
+WHERE sp.series_id = ? AND sp.phase_id='1'
 GROUP BY sp.glyph_name
 ORDER BY sp.group_label, total_score DESC;");
     $query->execute([$series_id]);
@@ -35,6 +35,50 @@ ORDER BY sp.group_label, total_score DESC;");
 } else {
     // no parameter provided
 }
+
+// Fetch Phase 2 data
+if ($series_id){
+    $query = $pdo->prepare("SELECT 
+    m.tournament_id, 
+    m.id AS match_id,
+    sp.group_label,
+    m.p1_glyph_name, 
+    m.p2_glyph_name,
+    -- Determine if Player 1 won
+    CASE 
+        WHEN mr.total_p1 > mr.total_p2 THEN 1 
+        ELSE 0 
+    END AS p1_win,
+    -- Determine if Player 2 won
+    CASE 
+        WHEN mr.total_p2 > mr.total_p1 THEN 1 
+        ELSE 0 
+    END AS p2_win,
+    mr.total_p1,
+    mr.total_p2
+FROM `matches` m
+-- Join the series metadata to get the group labels and filter tournaments
+INNER JOIN (
+    SELECT DISTINCT tournament_id, group_label 
+    FROM `series_participants` 
+    WHERE series_id = ? AND phase_id = '2'
+) sp ON m.tournament_id = sp.tournament_id
+-- Join the aggregated round scores
+LEFT JOIN (
+    SELECT 
+        match_id, 
+        SUM(p1_final_score) AS total_p1, 
+        SUM(p2_final_score) AS total_p2
+    FROM `match_rounds`
+    GROUP BY match_id
+) mr ON m.id = mr.match_id
+ORDER BY sp.group_label ASC, m.id ASC;");
+    $query->execute([$series_id]);
+    $seriesDataPhaseTwo = $query->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    // no parameter provided
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -410,7 +454,7 @@ ORDER BY sp.group_label, total_score DESC;");
 
 <script>
 
-    document.addEventListener('DOMContentLoaded', getSeriesData);
+    document.addEventListener('DOMContentLoaded', getSeriesData());
 
     // System Clock Synchronizer
     function updateClock() {
@@ -419,6 +463,16 @@ ORDER BY sp.group_label, total_score DESC;");
     }
     setInterval(updateClock, 1000);
     updateClock();
+
+    function getSeriesData(){
+
+        const currentSeriesData = <?php echo json_encode($seriesData); ?>;
+        //console.log("[weekly-summary.php] getSeriesData(): data = ");
+        //console.table(currentSeriesData);
+
+        populateTournament(currentSeriesData);        
+
+    }
 
     function populateTournament(data) {
         // 1. Clear previous data in tables and reset slot text
@@ -467,21 +521,64 @@ ORDER BY sp.group_label, total_score DESC;");
                     ]?.querySelectorAll('.matchup-slot')[slotMap[rank]];
 
                     if (targetSlot) {
-                        targetSlot.innerHTML = `<span>${rank}${rank === 4 ? 'th' : rank === 5 ? 'th' : rank === 6 ? 'th' : 'th'}: ${p.glyph_name}</span><span class="score">${p.total_score}</span>`;
+                        targetSlot.innerHTML = `<span>${rank}${rank === 4 ? 'th' : rank === 5 ? 'th' : rank === 6 ? 'th' : 'th'}: ${p.glyph_name}</span><span class="score"></span>`;
                     }
                 }
             });
         });
     }
 
-    function getSeriesData(){
+    function populatePhaseTwo(){
+
+        const phaseTwoData = <?php echo json_encode($seriesDataPhaseTwo); ?>;
+        const groups = { 'A': [], 'B': [], 'C': [], 'D': [] };
+        phaseTwoData.forEach(p => groups[p.group_label]?.push(p));
+
+        //console.log("[weekly-summary.php] populatePhaseTwo(): phaseTwoData = ");
+        //console.table(phaseTwoData);
+        console.log("[weekly-summary.php] populatePhaseTwo(): groups = ");
+        console.table(groups);
+
+        Object.keys(groups).forEach(groupLetter => {
+
+            let c = groupLetter.charCodeAt(0) - 65; // this maps the group letters A through D to integers 0 to 3
+            for (let i = 0; i < 3; i++){
+
+                console.log(groupLetter + ": " + parseInt(2*i + 6*c) + ", " + parseInt(2*i + 1 + 6*c));
+
+                let g1 = groups[groupLetter][i].p1_glyph_name;
+                let g2 = groups[groupLetter][i].p2_glyph_name;
+                let p1 = groups[groupLetter][i].total_p1;
+                let p2 = groups[groupLetter][i].total_p2;
+
+                const targetSlot1 = document.querySelectorAll('.matchup-slot')[2*i + c*6];
+                const targetSlot2 = document.querySelectorAll('.matchup-slot')[2*i + 1 + c*6];
+
+                if (targetSlot1 && targetSlot2) {
+                    targetSlot1.innerHTML = `<span>${g1}</span><span class="score">${p1}</span>`;
+                    targetSlot2.innerHTML = `<span>${g2}</span><span class="score">${p2}</span>`;
+                    if (p1 > p2){ 
+                        targetSlot1.style.borderLeft = "2px solid var(--accent-green)"; 
+                        targetSlot2.style.borderLeft = "2px solid #f44242";
+                    }
+                    else{ 
+                        targetSlot1.style.borderLeft = "2px solid #f44242";
+                        targetSlot2.style.borderLeft = "2px solid var(--accent-green)"; 
+                    }
+                }
+
+            }
+
+        });
+
+    }
+
+    function commitNextStage(){
 
         const currentSeriesData = <?php echo json_encode($seriesData); ?>;
         console.log("[weekly-summary.php] getSeriesData(): data = ");
-        console.table(currentSeriesData);
-
-        // populateLeaderboards(currentSeriesData);
-        populateTournament(currentSeriesData);
+        console.table(currentSeriesData);    
+        
         saveNextStage(currentSeriesData);
 
     }
