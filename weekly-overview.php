@@ -10,6 +10,115 @@ include_once __DIR__ . '/../../priv/db_conf_laniakea.php';
 // Fetch all available Conway Glyphs
 $stmt = $pdo->query("SELECT BATTLE_NAME, ITERATIONS as GENERATIONS, PEAK, MAX, OWNER, BIN, HASH FROM GLYPHREG ORDER BY BATTLE_NAME ASC");
 $glyphs = $stmt->fetchAll();
+
+// Top 3 Glyphs from Phase I
+$phaseOneAdvances = [];
+$series_id = isset($_GET['series_id']) && is_numeric($_GET['series_id']) ? (int)$_GET['series_id'] : null;
+if ($series_id){
+    $query = $pdo->prepare("WITH RankedGlyphs AS (
+    SELECT 
+        sp.glyph_name, 
+        sp.group_label, 
+        SUM(
+            CASE 
+                WHEN m.p1_glyph_name = sp.glyph_name THEN mr.p1_final_score 
+                WHEN m.p2_glyph_name = sp.glyph_name THEN mr.p2_final_score 
+                ELSE 0 
+            END
+        ) AS total_score,
+        DENSE_RANK() OVER (
+            PARTITION BY sp.group_label 
+            ORDER BY SUM(
+                CASE 
+                    WHEN m.p1_glyph_name = sp.glyph_name THEN mr.p1_final_score 
+                    WHEN m.p2_glyph_name = sp.glyph_name THEN mr.p2_final_score 
+                    ELSE 0 
+                END
+            ) DESC
+        ) AS score_rank
+    FROM series_participants sp
+    JOIN matches m ON sp.tournament_id = m.tournament_id 
+        AND (sp.glyph_name = m.p1_glyph_name OR sp.glyph_name = m.p2_glyph_name)
+    JOIN match_rounds mr ON m.id = mr.match_id
+    WHERE sp.series_id = ? AND sp.phase_id = '1'
+    GROUP BY sp.glyph_name, sp.group_label
+)
+SELECT 
+    glyph_name, 
+    group_label, 
+    total_score
+FROM RankedGlyphs
+WHERE score_rank <= 3
+ORDER BY group_label, total_score DESC;");
+    $query->execute([$series_id]);
+    $phaseOneAdvances = $query->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    // no parameter provided
+}
+
+// Winners of Redemption Knock-Out tourneys
+$phaseTwoWinners = [];
+$series_id = isset($_GET['series_id']) && is_numeric($_GET['series_id']) ? (int)$_GET['series_id'] : null;
+if ($series_id){
+    $query = $pdo->prepare("WITH MatchResults AS (
+    SELECT 
+        m.tournament_id,         
+        m.p1_glyph_name, 
+        m.p2_glyph_name,
+        sp.group_label,
+        CASE 
+            WHEN mr.total_p1 > mr.total_p2 THEN 1 
+            ELSE 0 
+        END AS p1_win,
+        CASE 
+            WHEN mr.total_p2 > mr.total_p1 THEN 1 
+            ELSE 0 
+        END AS p2_win
+    FROM `matches` m
+    INNER JOIN (
+        SELECT DISTINCT tournament_id, group_label 
+        FROM `series_participants` 
+        WHERE series_id = ? AND phase_id = '2'
+    ) sp ON m.tournament_id = sp.tournament_id
+    LEFT JOIN (
+        SELECT 
+            match_id, 
+            SUM(p1_final_score) AS total_p1, 
+            SUM(p2_final_score) AS total_p2
+        FROM `match_rounds`
+        GROUP BY match_id
+    ) mr ON m.id = mr.match_id
+),
+UnpivotedWins AS (
+    SELECT group_label, p1_glyph_name AS glyph_name, p1_win AS win_count FROM MatchResults
+    UNION ALL
+    SELECT group_label, p2_glyph_name AS glyph_name, p2_win AS win_count FROM MatchResults
+),
+AggregatedWins AS (
+    SELECT 
+        glyph_name,
+        group_label,        
+        SUM(win_count) AS total_wins,
+        -- Rank the glyphs within each group based on their aggregated wins
+        ROW_NUMBER() OVER (
+            PARTITION BY group_label 
+            ORDER BY SUM(win_count) DESC
+        ) AS win_rank
+    FROM UnpivotedWins
+    GROUP BY group_label, glyph_name
+)
+SELECT 
+    glyph_name,
+    group_label,    
+    total_wins
+FROM AggregatedWins
+WHERE win_rank = 1
+ORDER BY group_label ASC;");
+    $query->execute([$series_id]);
+    $phaseTwoWinners = $query->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    // no parameter provided
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -521,7 +630,8 @@ $glyphs = $stmt->fetchAll();
                         data-gens="<?php echo $glyph['GENERATIONS']; ?>" 
                         data-peak="<?php echo $glyph['PEAK']; ?>"
                         data-originBin="<?php echo $glyph['BIN']; ?>"
-                        data-originHash="<?php echo $glyph['HASH']; ?>">
+                        data-originHash="<?php echo $glyph['HASH']; ?>"
+                        data-name="<?php echo htmlspecialchars($glyph['BATTLE_NAME']); ?>">
 
                         <div style="display: flex; gap: 10px;">
                             <div style="flex: 1;">
@@ -941,6 +1051,74 @@ $glyphs = $stmt->fetchAll();
             svg += `</svg>`;
             container.innerHTML = svg;
         });
+    }
+
+    function fetchTopThreeFromPhaseOne(){
+
+        const phaseOneTopThree = <?php echo json_encode($phaseOneAdvances); ?>;
+        console.table(phaseOneTopThree);
+        return phaseOneTopThree;
+
+    }
+
+    function fetchPhaseTwoWinners(){
+
+        const phaseTwoWinners = <?php echo json_encode($phaseTwoWinners); ?>;
+        console.table(phaseTwoWinners);
+        return phaseTwoWinners;
+
+    }
+
+    function compileFinalTourneyParticipants(){
+
+        let participants = [];
+
+        let phaseOne = fetchTopThreeFromPhaseOne();
+        let phaseTwo = fetchPhaseTwoWinners();
+
+        phaseOne.forEach((glyph) => { participants.push(glyph.glyph_name.toUpperCase()); });
+        phaseTwo.forEach((glyph) => { participants.push(glyph.glyph_name.toUpperCase()); });
+
+        console.log("[weekly-overview.php] compileFinalTourneyParticipants(): Fetching Phase I and Phase II winners.");
+        console.table(participants);
+
+        executeFinalDraw(participants);
+
+    }
+
+    function executeFinalDraw(allowedNames) {
+
+        const rawSeed = parseInt(document.getElementById('coerced-seed-box').innerText);
+        const engineSeed = Math.abs(rawSeed);
+        const eligibleGlyphs = Array.from(document.querySelectorAll('.glyph-matrix-card'))
+                                .filter(card => allowedNames.includes(card.dataset.name.toUpperCase()));
+
+        console.log("[weekly-overview.php] executeFinalDraw(): Number of finalists: " + eligibleGlyphs.length);
+
+        if (eligibleGlyphs.length < 16) return;
+
+        // 1. Initialize seeded PRNG and shuffle
+        const rng = seededRandom(engineSeed);
+        for (let i = eligibleGlyphs.length - 1; i > 0; i--) {
+            const j = Math.floor(rng() * (i + 1));
+            [eligibleGlyphs[i], eligibleGlyphs[j]] = [eligibleGlyphs[j], eligibleGlyphs[i]];
+        }
+        
+        // 2. Assign shuffled deck to groups
+        const finalSet = eligibleGlyphs.slice(0, 16);
+
+        /*
+        finalSet.forEach((el, index) => {
+            if (!el || !el.dataset) {
+                console.error(`Item at index ${index} is broken! Type is:`, typeof el, "Value is:", el);
+            }
+        });
+        */
+
+        const finalSetOutput = finalSet.map(element => element.dataset.name);
+        console.log("[weekly-overview.php] executeFinalDraw(): Here are the 16 finalists for the Grand Finale in randomized draw order:");
+        console.table(finalSetOutput);
+
     }
 
 </script>
