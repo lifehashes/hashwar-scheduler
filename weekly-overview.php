@@ -709,9 +709,83 @@ ORDER BY group_label ASC;");
     </div>
 </div>
 
+<div id="tournament-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(6, 12, 12, 0.95); z-index:1000; padding:30px; box-sizing:border-box; font-family:monospace; color:#a3b8cc;">
+    
+    <h2 style="color:#00ffcc; text-align:center; font-size: 2rem; letter-spacing: 2px; margin-bottom: 30px; text-shadow: 0 0 10px rgba(0,255,204,0.3);">
+        INITIATING QUANTUM SHUFFLE...
+    </h2>
+    
+    <div style="display:grid; grid-template-columns: 1.5fr 1fr 1fr 1.2fr 1fr 1fr 1.5fr; gap:15px; height:calc(100vh - 120px); align-items: center;">
+        
+        <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
+            <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color:#567;">Round of 16 (Left)</div>
+            <div style="margin: 10px 0;"><div class="group-col" id="tourney-glyph-1"></div><div class="group-col" id="tourney-glyph-2"></div></div>
+            <div style="margin: 10px 0;"><div class="group-col" id="tourney-glyph-3"></div><div class="group-col" id="tourney-glyph-4"></div></div>
+            <div style="margin: 10px 0;"><div class="group-col" id="tourney-glyph-5"></div><div class="group-col" id="tourney-glyph-6"></div></div>
+            <div style="margin: 10px 0;"><div class="group-col" id="tourney-glyph-7"></div><div class="group-col" id="tourney-glyph-8"></div></div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; justify-content: space-around; height: 100%;">
+            <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color:#567; align-self: flex-start;">Quarter-Finals</div>
+            <div style="border: 1px solid #223333; background: rgba(10,20,20,0.4); min-height: 70px; width: 100%;"></div>
+            <div style="border: 1px solid #223333; background: rgba(10,20,20,0.4); min-height: 70px; width: 100%;"></div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; justify-content: center; height: 100%;">
+            <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color:#567; margin-bottom: 10px;">Semi-Final 1</div>
+            <div style="border: 1px solid #223333; background: rgba(10,20,20,0.4); min-height: 80px; width: 100%;"></div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; justify-content: center; height: 100%; gap: 40px; text-align: center;">
+            
+            <div>
+                <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color:#d4af37; margin-bottom: 8px;">Grand Championship</div>
+                <div style="border: 2px solid #d4af37; background: rgba(25,22,15,0.4); min-height: 90px; border-radius: 4px;"></div>
+            </div>
+
+            <div>
+                <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color:#a87c43; margin-bottom: 8px;">3rd Place Playoff</div>
+                <div style="border: 1px solid #a87c43; background: rgba(20,16,12,0.4); min-height: 70px; font-size: 0.75rem; padding: 10px 5px; color: #765;">
+                    <div style="margin-bottom: 5px;">M13 LOSER</div>
+                    <div>M14 LOSER</div>
+                </div>
+            </div>
+
+            <div style="color: #00ffcc; font-size: 0.9rem; font-weight: bold; letter-spacing: 1px; animation: blink 2s infinite; margin-top: 20px;">
+                AWAITING RESOLUTION
+            </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; justify-content: center; height: 100%;">
+            <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color:#567; margin-bottom: 10px; text-align: right;">Semi-Final 2</div>
+            <div style="border: 1px solid #223333; background: rgba(10,20,20,0.4); min-height: 80px; width: 100%;"></div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; justify-content: space-around; height: 100%;">
+            <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color:#567; align-self: flex-end;">Quarter-Finals</div>
+            <div style="border: 1px solid #223333; background: rgba(10,20,20,0.4); min-height: 70px; width: 100%;"></div>
+            <div style="border: 1px solid #223333; background: rgba(10,20,20,0.4); min-height: 70px; width: 100%;"></div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
+            <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color:#567; text-align: right;">Round of 16 (Right)</div>
+            <div style="margin: 10px 0;"><div class="group-col" id="tourney-glyph-9"></div><div class="group-col" id="tourney-glyph-10"></div></div>
+            <div style="margin: 10px 0;"><div class="group-col" id="tourney-glyph-11"></div><div class="group-col" id="tourney-glyph-12"></div></div>
+            <div style="margin: 10px 0;"><div class="group-col" id="tourney-glyph-13"></div><div class="group-col" id="tourney-glyph-14"></div></div>
+            <div style="margin: 10px 0;"><div class="group-col" id="tourney-glyph-15"></div><div class="group-col" id="tourney-glyph-16"></div></div>
+        </div>
+
+    </div>
+</div>
+
 <style>
     .group-col { border: 1px solid #333; padding: 10px; display:flex; flex-direction:column; gap:5px; }
     .group-col h3 { color:#666; font-size:0.8rem; text-align:center; }
+    /* Quick helper for the flashing resolution status */
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+    }
 </style>
 
 <script>
@@ -1086,7 +1160,7 @@ ORDER BY group_label ASC;");
 
     }
 
-    function executeFinalDraw(allowedNames) {
+    async function executeFinalDraw(allowedNames) {
 
         const rawSeed = parseInt(document.getElementById('coerced-seed-box').innerText);
         const engineSeed = Math.abs(rawSeed);
@@ -1107,17 +1181,26 @@ ORDER BY group_label ASC;");
         // 2. Assign shuffled deck to groups
         const finalSet = eligibleGlyphs.slice(0, 16);
 
-        /*
-        finalSet.forEach((el, index) => {
-            if (!el || !el.dataset) {
-                console.error(`Item at index ${index} is broken! Type is:`, typeof el, "Value is:", el);
-            }
-        });
-        */
-
         const finalSetOutput = finalSet.map(element => element.dataset.name);
         console.log("[weekly-overview.php] executeFinalDraw(): Here are the 16 finalists for the Grand Finale in randomized draw order:");
         console.table(finalSetOutput);
+
+        // 4. Now animate using the 'groups' object
+        const modal = document.getElementById('tournament-modal');
+        modal.style.display = 'block';
+
+        for (let i = 1; i < 17; i++){
+
+            const col = document.getElementById(`tourney-glyph-${i}`);
+            const clone = finalSet[i-1].cloneNode(true);
+            clone.style.opacity = '0';
+            col.appendChild(clone);
+
+            await new Promise(r => setTimeout(r, 50));
+            clone.style.transition = 'opacity 0.3s';
+            clone.style.opacity = '1';
+
+        }
 
     }
 
