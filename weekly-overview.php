@@ -1202,6 +1202,30 @@ ORDER BY group_label ASC;");
 
         }
 
+        let package = [];
+        for (let i = 0; i < finalSetOutput.length; i++){
+
+            package.push({
+                name: finalSetOutput[i].toUpperCase(),
+                group: "final",
+                phase: 3
+            });
+
+        }        
+
+        // 3b. Save package to database
+        console.log("Saving to database...");        
+        const queryParameter = window.location.search;
+        const urlParameters = new URLSearchParams(queryParameter);
+        const seriesId = urlParameters.get('series_id');
+        console.log("[weekly-summary.php] saveNextStage(): seriesId = " + seriesId);
+
+        const response = await fetch('php/save-next-stage.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ participants: package, series: seriesId })
+        });
+
     }
 
 </script>
