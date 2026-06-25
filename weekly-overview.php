@@ -656,8 +656,8 @@ ORDER BY group_label ASC;");
         </div>
 
         <div class="timeline-control-panel">
-            <h2 class="panel-header">
-                Sacred Timeline
+            <h2 class="panel-header" style="font-size: 0.9rem;">
+                Canonical Timeline
                 <span class="status-badge" id="tva-status">MONITORING</span>
             </h2>
             
@@ -892,7 +892,7 @@ ORDER BY group_label ASC;");
 
         const result = await response.json();
         if (result.status === 'success') {
-            // alert('Draw saved! Series ID: ' + result.series_id);
+            console.log('Draw saved! Series ID: ' + result.series_id);
 
             // 4. Now animate using the 'groups' object
             const dayKeys = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY'];
@@ -969,7 +969,7 @@ ORDER BY group_label ASC;");
         
         fetch(`https://beacon.nist.gov/beacon/2.0/pulse/time/previous/${currentTimestamp}`)
             .then(response => {
-                if(!response.ok) throw new Error("Network latency in the Sacred Timeline.");
+                if(!response.ok) throw new Error("Network latency in the Canonical Timeline.");
                 return response.json();
             })
             .then(data => {
