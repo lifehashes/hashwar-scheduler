@@ -1,365 +1,347 @@
+/* --- CORE STYLES SEEDED FROM STYLES.CSS --- */
 :root {
     --bg-color: #203030;
     --panel-bg: rgba(48, 64, 64, 0.8);
     --accent-green: #42f485;
-    --frame-grey: #d1d1d1; /* The light grey thin frame */
+    --frame-grey: #d1d1d1;
     --text-main: #f0f0f0;
+    --dark-base: #111a1a;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
 }
 
 body {
     background-color: var(--bg-color);
     color: var(--text-main);
-    font-family: 'Calibri', sans-serif;
-    margin: 0;
-    padding: 20px;
+    font-family: 'Calibri', 'Segoe UI', sans-serif;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    min-height: 100vh;
+    padding: 20px;
 }
 
-/* The Main Encompassing Frame */
+/* --- THE CORE COMPREHENSIVE WINDOW FRAME --- */
 .outer-frame {
     border: 1px solid var(--frame-grey);
-    padding: 10px 15px;
-    width: 98vw;    /* Use more screen width */
+    padding: 20px;
+    width: 95vw;
     max-width: 1600px;
-    background: rgba(0,0,0,0.1);
-    position: relative;
+    background: rgba(0, 0, 0, 0.2);
     margin: 0 auto;
-}
-
-/* Flex container for the three main elements */
-.duel-stage {
-    display: flex;
-    align-items: flex-start; /* Make boxes equal height */
-    gap: 10px;            /* Tighter gap */
-    margin-bottom: 20px;
-}
-
-/* Player Box - Indented toward the middle */
-.player-box {
-    flex: 0 0 200px;         /* Slightly narrower to "bunch" more */
-    background: var(--panel-bg);
-    border: 1px solid rgba(255,255,255,0.1);
-    padding: 10px;
     display: flex;
     flex-direction: column;
-    justify-content: flex-start; /* Pushes content to the top */
-    gap: 5px;
-    overflow: hidden;
+    flex-grow: 1;
+    box-shadow: 0px 10px 30px rgba(0,0,0,0.5);
 }
 
-/* Specific Indentation: P1 pushes right, P2 pushes left */
-.p1-box { margin-left: 0%; }
-.p2-box { margin-right: 0%; }
-
-.glyph-preview-container {
-    display: flex;
-    justify-content: center; /* Keeps the whole unit centered in the column */
-    align-items: center;
-    gap: 8px;
-    width: 100%;            /* Constraints it to the player-box width */
-    margin: 10px 0;
-    box-sizing: border-box;
+header {
+    margin-bottom: 15px;
+    border-bottom: 1px solid rgba(209, 209, 209, 0.3);
+    padding-bottom: 5px;
 }
 
-.glyph-canvas {
-    position: relative;
-    width: 120px;
-    height: 120px;
-    margin: 0 auto 5px auto; /* Centered with small bottom margin */
-    background: #111;
-    border: 1px solid var(--frame-grey);
-    box-shadow: 3px 3px 10px rgba(0,0,0,0.5);
-    flex-shrink: 0;          /* Prevents squishing */
-}
-
-.glyph-stats {
-    display: flex;
-    flex-direction: column;
+.title {
     font-family: 'Courier New', monospace;
-    font-size: 0.55rem;     /* Slightly smaller to ensure fit */
-    color: var(--frame-grey);
-    min-width: 70px;
-    flex-shrink: 0;         /* Prevents text from squishing */
-}
-
-.p1-layout .glyph-stats { text-align: right; }
-.p2-layout .glyph-stats { text-align: left; }
-
-.stat-item {
-    margin: 2px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-}
-
-.glyph-specs span {
+    font-size: 1.5rem;
     font-weight: bold;
-    display: inline;
-    color: var(--text-main);
-    margin-left: 0px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #fff;
 }
 
-/* Arena remains central */
-.arena-container {
-    flex: 1; 
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-}
-
-canvas#canvasA {
-    width: 100%;
-    background: #000;
-    border: 1px solid rgba(255,255,255,0.05);
-}
-
-/* UI Readouts */
-.stat-line {
+.subtitle {
     font-family: 'Courier New', monospace;
-    font-size: 0.75rem;      /* Slightly smaller text */
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-    padding: 2px 0;
-    display: flex;
-    justify-content: space-between;
-}
-
-#gamestatus {
-    text-align: center;
+    font-size: 0.65rem;
     color: var(--accent-green);
-    font-family: 'Courier New', monospace;
-    font-size: 0.8rem;
-    margin-bottom: 0px;
+    margin-top: 5px;
+    letter-spacing: 2px;
     text-transform: uppercase;
 }
 
-.hash-readout h2 {
-    font-size: 1.1rem;
-    margin-bottom: 10px !important;
-    width: 100%;
+/* --- CONSOLE CONTAINER SYSTEM --- */
+.console-container {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
 }
 
-/* Modal Background Overlay */
-.modal-overlay {
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(5px);
-    display: none; /* Hidden by default */
+/* Radio State Tokens */
+.tab-state {
+    display: none;
+}
+
+/* --- STYLED ADVANCED LABELS --- */
+.tab-headers {
+    display: flex;
+    gap: 10px;
+    list-style: none;
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 5px;
+}
+
+.tab-card {
+    flex: 1;
+    min-width: 180px;
+    background: var(--panel-bg);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 12px 15px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    transition: all 0.2s ease-in-out;
+    border-top: 3px solid rgba(255, 255, 255, 0.2);
+}
+
+.tab-card:hover {
+    background: rgba(66, 244, 133, 0.08);
+    border-color: rgba(66, 244, 133, 0.4);
+}
+
+/* Card Text Top-Row Styling */
+.tab-card-title {
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    font-size: 0.85rem;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Card Secondary Meta Subtitle */
+.tab-card-meta {
+    font-family: 'Courier New', monospace;
+    font-size: 0.65rem;
+    color: var(--frame-grey);
+    letter-spacing: 1px;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+    padding-bottom: 6px;
+    margin-bottom: 4px;
+}
+
+/* Custom Graphic Enclosure Inside the Tab Label */
+.tab-card-graphic {
+    width: 100%;
+    height: 120px;
+    background: var(--dark-base);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 1000;
+    margin-top: 5px;
 }
 
-/* The Selection Window */
-.modal-window {
-    background: var(--panel-bg);
+/* --- MAIN CENTRAL WORKSPACE --- */
+.content-panel {
+    background-color: var(--panel-bg);
     border: 1px solid var(--frame-grey);
-    width: 80%;
-    max-width: 800px;
-    max-height: 80vh;
-    padding: 30px;
-    overflow-y: auto;
-    color: var(--text-main);
+    flex-grow: 1;
+    padding: 15px;
+    position: relative;
+    margin-top: -1px; /* Ties directly flush against the cards */
+    min-height: 400px;
 }
 
-.glyph-row {
+.tab-content {
+    display: none;
+    animation: terminalFade 0.25s ease-out forwards;
+}
+
+.tab-content h2 {
+    font-family: 'Courier New', monospace;
+    color: var(--accent-green);
+    font-size: 0.85rem;
+    letter-spacing: 2px;
+    margin-bottom: 15px;
+}
+
+/* --- SWITCHING CONTROL SYSTEM ARCHITECTURE --- */
+#tab-1:checked ~ .tab-headers label[for="tab-1"],
+#tab-2:checked ~ .tab-headers label[for="tab-2"],
+#tab-3:checked ~ .tab-headers label[for="tab-3"],
+#tab-4:checked ~ .tab-headers label[for="tab-4"],
+#tab-5:checked ~ .tab-headers label[for="tab-5"],
+#tab-6:checked ~ .tab-headers label[for="tab-6"],
+#tab-7:checked ~ .tab-headers label[for="tab-7"] {
+    border-color: var(--accent-green);
+    border-top: 3px solid var(--accent-green);
+    background: rgba(48, 64, 64, 1);
+    box-shadow: 0 -4px 15px rgba(66, 244, 133, 0.15);
+}
+
+#tab-1:checked ~ .tab-headers label[for="tab-1"] .tab-card-title,
+#tab-2:checked ~ .tab-headers label[for="tab-2"] .tab-card-title,
+#tab-3:checked ~ .tab-headers label[for="tab-3"] .tab-card-title,
+#tab-4:checked ~ .tab-headers label[for="tab-4"] .tab-card-title,
+#tab-5:checked ~ .tab-headers label[for="tab-5"] .tab-card-title,
+#tab-6:checked ~ .tab-headers label[for="tab-6"] .tab-card-title,
+#tab-7:checked ~ .tab-headers label[for="tab-7"] .tab-card-title {
+    color: var(--accent-green);
+}
+
+#tab-1:checked ~ .content-panel #content-1,
+#tab-2:checked ~ .content-panel #content-2,
+#tab-3:checked ~ .content-panel #content-3,
+#tab-4:checked ~ .content-panel #content-4,
+#tab-5:checked ~ .content-panel #content-5,
+#tab-6:checked ~ .content-panel #content-6,
+#tab-7:checked ~ .content-panel #content-7 {
+    display: block;
+}
+
+/* --- PLACEHOLDER WIREFRAMES --- */
+.scaffolding-blueprint {
+    border: 1px dashed rgba(66, 244, 133, 0.2);
+    padding: 20px;
+    margin-bottom:10px;
+    text-align: center;
+    font-family: 'Courier New', monospace;
+    color: var(--frame-grey);
+    font-size: 0.85rem;
+    background: rgba(0,0,0,0.15);
+}
+
+/* --- SYSTEM FOOTER --- */
+footer {
+    margin-top: 15px;
+    border-top: 1px dashed rgba(209, 209, 209, 0.2);
+    padding-top: 15px;
     display: flex;
     justify-content: space-between;
-    padding: 10px;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-    cursor: pointer;
-    transition: 0.2s;
+    font-family: 'Courier New', monospace;
+    font-size: 0.45rem;
+    color: var(--frame-grey);
+    letter-spacing: 1px;
 }
 
-.glyph-row:hover {
-    background: rgba(66, 244, 133, 0.2);
+@keyframes terminalFade {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
-.load-btn {
-    font-size: 0.6rem;
-    background: none;
-    border: 1px solid var(--accent-green);
+/* Group Phase Layout (7 columns) */
+.groups-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 15px;
+}
+
+.group-card {
+    background: var(--panel-bg);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 15px;
+}
+
+.group-header {
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
     color: var(--accent-green);
-    padding: 2px 5px;
-    cursor: pointer;
-    vertical-align: middle;
-}
-
-.analytics-tab {
-    width: 100%;
-    margin-top: 20px;
-}
-
-.analytics-tab canvas {
-    width: 100%;       /* Match arena width */
-    height: 120px;     /* Set a fixed visual height */
-    background: #000;
-    border: 1px solid rgba(255,255,255,0.05);
-    display: block;
+    border-bottom: 1px solid rgba(66, 244, 133, 0.3);
+    padding-bottom: 5px;
+    margin-top: 0;
     margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
 }
 
-.analytics-tab h3 {
+/* Leaderboard table simulation */
+.group-table {
+    width: 100%;
+    border-collapse: collapse;
     font-family: 'Courier New', monospace;
-    font-size: 0.7rem;
-    color: var(--frame-grey);
-    margin: 10px 0 5px 0;
+    font-size: 0.75rem;
+}
+
+.group-table th {
     text-align: left;
-    letter-spacing: 1px;
+    color: #888;
+    padding: 4px;
+    font-weight: normal;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
 }
 
-.cell-profile-container {
-    width: 100%;
-    height: 30px; /* Thin vertical axis */
-    background: rgba(0,0,0,0.3);
-    border: 1px solid rgba(255,255,255,0.05);
+.group-table td {
+    padding: 6px 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
 }
 
-.profile-label {
-    font-family: 'Courier New', monospace;
-    font-size: 0.5rem;
-    color: var(--frame-grey);
-    text-transform: uppercase;
-    margin-top: 12px;
-}
+/* Row threshold colors mapping your rules */
+.row-advance { border-left: 2px solid var(--accent-green); background: rgba(66, 244, 133, 0.02); }
+.row-redemption { border-left: 2px solid #f4d042; background: rgba(244, 208, 66, 0.01); }
+.row-pruned { border-left: 2px solid #f44242; color: #666; }
 
-/* Add this to your styles.css */
-#start-match-btn {
-    transition: all 0.3s ease;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    cursor: pointer;
-}
-
-#start-match-btn:hover {
-    background: rgba(66, 244, 133, 0.1);
-    box-shadow: 0 0 15px var(--accent-green);
-    color: white;
-}
-
-/* Optional: Make it pulse until clicked */
-.pulse-green {
-    animation: pulse-animation 2s infinite;
-}
-
-@keyframes pulse-animation {
-    0% { box-shadow: 0 0 0 0px rgba(66, 244, 133, 0.4); }
-    100% { box-shadow: 0 0 0 10px rgba(66, 244, 133, 0); }
-}
-
-.round-opt.selected {
-    border-color: var(--accent-green) !important;
-    color: var(--accent-green) !important;
-    background: rgba(66, 244, 133, 0.1);
-}
-
-#modal-canvas-container {
-    position: relative; /* This is the anchor */
-    width: 100%;
-    height: 80vh;       /* Use viewport height to ensure there's actual space */
-    margin: 0 auto;
-    overflow: visible;  /* Prevent clipping if radius is large */
-}
-
-.modal-glyph-canvas {
-    position: absolute;
-    border: 1px solid rgba(66, 244, 133, 0.3);
-    border-radius: 50%;
-    transform: translate(-50%, -50%); /* Center the canvas on its coordinates */
-    background: rgba(0,0,0,0.5);
-    animation: glyph-pulse 2s infinite ease-in-out;
-}
-
-@keyframes glyph-pulse {
-    0% { box-shadow: 0 0 10px rgba(66, 244, 133, 0.2); }
-    50% { box-shadow: 0 0 25px rgba(66, 244, 133, 0.5); }
-    100% { box-shadow: 0 0 10px rgba(66, 244, 133, 0.2); }
-}
-
-.modal-glyph-label {
-    position: absolute;
-    transform: translate(65px, -50%); 
-    color: #fff;
-    font-family: 'Courier New', monospace;
-    pointer-events: none;
-    background: rgba(0, 0, 0, 0.75);
-    padding: 6px 12px;
-    border-left: 3px solid var(--accent-green);
-    /* Set a display type that stacks children */
+/* Bracket Systems (Friday & Saturday) */
+.brackets-wrapper {
     display: flex;
-    flex-direction: column; 
-    gap: 2px;
-    z-index: 1001;
-    min-width: 120px;
+    gap: 20px;
+    overflow-x: auto;
+    padding-bottom: 10px;
 }
 
-.modal-glyph-label h3 {
-    margin: 0;
-    font-size: 14px;
-    color: var(--accent-green);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-.modal-glyph-stats {
-    display: flex;
-    gap: 8px; /* Spacing between abbreviated items */
-    font-size: 10px;
-    color: #aaa;
-    border-top: 1px solid rgba(255,255,255,0.1);
-    padding-top: 2px;
-}
-
-.stat-val {
-    color: #fff;
-    font-weight: bold;
-}
-
-#tournament-modal .start-btn {
-    background: transparent;
-    border: 1px solid var(--accent-green);
-    color: var(--accent-green);
-    padding: 12px 40px;
-    font-family: 'Courier New', monospace;
-    font-size: 1.2rem;
-    font-weight: bold;
-    letter-spacing: 4px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    text-transform: uppercase;
-    margin-top: 30px;
-    box-shadow: 0 0 10px rgba(66, 244, 133, 0.2);
-}
-
-#tournament-modal .start-btn:hover {
-    background: var(--accent-green);
-    color: #000;
-    box-shadow: 0 0 25px var(--accent-green);
-    transform: scale(1.05);
-}
-
-/* Position the button at the bottom of the modal content */
-.modal-content {
+.bracket-column {
+    flex: 1;
+    min-width: 160px;
     display: flex;
     flex-direction: column;
+    gap: 15px;
+}
+
+.bracket-round-header {
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    color: var(--frame-grey);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px dashed rgba(255,255,255,0.1);
+    padding-bottom: 5px;
+    margin-bottom: 5px;
+}
+
+.matchup-card {
+    background: var(--panel-bg);
+    border: 1px solid rgba(255,255,255,0.05);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    position: relative;
+}
+
+.matchup-slot {
+    display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding-bottom: 40px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    padding: 4px 6px;
+    background: rgba(0,0,0,0.2);
 }
 
-/* MATCH SUMMARY WINNER GLOW */
-.winner-pulse-glow {
-    animation: terminalWinnerGlow 2s infinite ease-in-out;
+.matchup-slot.winner {
+    color: var(--accent-green);
+    font-weight: bold;
+    background: rgba(66, 244, 133, 0.05);
 }
 
-@keyframes terminalWinnerGlow {
-    0% {
-        text-shadow: 0 0 4px rgba(66, 244, 133, 0.2);
-    }
-    50% {
-        text-shadow: 0 0 15px rgba(66, 244, 133, 0.8), 0 0 25px rgba(66, 244, 133, 0.4);
-    }
-    100% {
-        text-shadow: 0 0 4px rgba(66, 244, 133, 0.2);
-    }
+.matchup-slot span.score {
+    font-weight: bold;
+    color: var(--frame-grey);
+}
+
+.matchup-slot.winner span.score {
+    color: var(--accent-green);
+}
+
+.match-meta {
+    font-size: 0.6rem;
+    color: #666;
+    text-align: right;
+    font-family: 'Courier New', monospace;
+    margin-top: 2px;
 }
