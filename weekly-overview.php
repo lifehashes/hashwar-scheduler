@@ -4,6 +4,24 @@
     $series_id = isset($_GET['series_id']) && is_numeric($_GET['series_id']) ? (int)$_GET['series_id'] : null;
 
     /* First Draw (assigning 32 Glyphs to 4 groups) */
+    if ($series_id){
+        $query = $pdo->prepare("SELECT 
+            sp.glyph_name, 
+            sp.group_label,
+            g.ITERATIONS, 
+            g.PEAK, 
+            g.BIN, 
+            g.HASH,
+            g.OWNER
+        FROM `series_participants` sp
+        INNER JOIN `GLYPHREG` g ON sp.glyph_name = g.BATTLE_NAME
+        WHERE sp.series_id = ? AND sp.phase_id = '1'
+        ORDER BY sp.id;");
+        $query->execute([$series_id]);
+        $firstDraw = $query->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        // no parameter provided
+    }
 
     /* Phase 1 (Group Phase) */
     if ($series_id){
@@ -74,6 +92,23 @@
     }
 
     /* Final Draw (assigning the 16 contestants randomly to match brackets) */
+    if ($series_id){
+         $query = $pdo->prepare("SELECT 
+            sp.glyph_name, 
+            g.ITERATIONS, 
+            g.PEAK, 
+            g.BIN, 
+            g.HASH,
+            g.OWNER
+        FROM `series_participants` sp
+        INNER JOIN `GLYPHREG` g ON sp.glyph_name = g.BATTLE_NAME
+        WHERE sp.series_id = ? AND sp.phase_id = '3'
+        ORDER BY sp.id;");
+         $query->execute([$series_id]);
+         $finalDraw = $query->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        // no parameter provided
+    }
 
     /* Phase 3 (Final Tournament) */
     if ($series_id){
@@ -241,6 +276,53 @@
                     <div class="scaffolding-blueprint">
                         [SYSTEM SYSTEMATICS READY]: 32 Conway Glyphs are randomly selected and assigned to 4 groups
                     </div>
+                    <div class="groups-container">
+                        <?php foreach (['A', 'B', 'C', 'D'] as $groupLetter): ?>
+                            <div class="group-card" id="group-<?php echo $groupLetter; ?>">
+                                <h3 class="group-header">
+                                    <span>GROUP <?php echo $groupLetter; ?></span>
+                                    <span style="font-size: 0.65rem; color: #888;">#</span>
+                                </h3>
+
+                                <?php foreach ($firstDraw as $glyph): ?>
+                                    <?php 
+                                    // Only render this glyph card if its group matches the current loop iteration
+                                    // Using strtoupper() ensures case insensitivity (e.g., 'a' matches 'A')
+                                    if (strtoupper($glyph['group_label']) !== $groupLetter) {
+                                        continue; 
+                                    }
+                                    ?>
+                                    
+                                    <div class="glyph-matrix-card" 
+                                        data-gens="<?php echo $glyph['ITERATIONS']; ?>" 
+                                        data-peak="<?php echo $glyph['PEAK']; ?>"
+                                        data-originBin="<?php echo $glyph['BIN']; ?>"
+                                        data-originHash="<?php echo $glyph['HASH']; ?>" 
+                                        data-name="<?php echo htmlspecialchars($glyph['glyph_name']); ?>">
+
+                                        <div style="display: flex; gap: 10px;">
+                                            <div style="flex: 1;">
+                                                <div class="glyph-identity">
+                                                    <h3><?php echo htmlspecialchars($glyph['glyph_name']); ?></h3>
+                                                </div>
+                                                <div class="glyph-info-compact">
+                                                    <div>Owner: <?php echo htmlspecialchars($glyph['OWNER'] ?? 'SYSTEM'); ?></div>
+                                                    <div style="color: var(--accent-green);">
+                                                        GENS: <?php echo $glyph['ITERATIONS'] ?? '0'; ?> | PEAK: <?php echo $glyph['PEAK'] ?? '0'; ?>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="glyph-preview" data-pattern='<?php echo $glyph['BIN'] ?? '0'; ?>'>
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                <?php endforeach; ?>
+
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
 
                 <!-- Tab Section 2 -->
@@ -333,6 +415,57 @@
                     <h2>[03a // FINAL DRAWS]</h2>
                     <div class="scaffolding-blueprint">
                         [SYSTEM SYSTEMATICS READY]: Random draw for the 16 Glyphs that qualified for the Championship
+                    </div>
+                    <div class="groups-container bracket-draw-view">
+                        <?php foreach (['LEFT', 'RIGHT'] as $groupLetter): ?>
+                            <div class="group-card" id="group-<?php echo $groupLetter; ?>">
+                                <h3 class="group-header">
+                                    <span><?php echo $groupLetter; ?> BRACKET</span>
+                                    <span style="font-size: 0.65rem; color: #888;">#</span>
+                                </h3>
+
+                                <!-- 1. Added $index to track the sequential position (0 to 15) -->
+                                <?php foreach ($finalDraw as $index => $glyph): ?>
+                                    <?php 
+                                    // 2. Logic to separate the sequential items:
+                                    // Indices 0-7 belong to LEFT, indices 8-15 belong to RIGHT
+                                    if ($groupLetter === 'LEFT' && $index >= 8) {
+                                        continue;
+                                    }
+                                    if ($groupLetter === 'RIGHT' && $index < 8) {
+                                        continue;
+                                    }
+                                    ?>
+                                    
+                                    <div class="glyph-matrix-card" 
+                                        data-gens="<?php echo $glyph['ITERATIONS']; ?>" 
+                                        data-peak="<?php echo $glyph['PEAK']; ?>"
+                                        data-originBin="<?php echo $glyph['BIN']; ?>"
+                                        data-originHash="<?php echo $glyph['HASH']; ?>" 
+                                        data-name="<?php echo htmlspecialchars($glyph['glyph_name']); ?>">
+
+                                        <div style="display: flex; gap: 10px;">
+                                            <div style="flex: 1;">
+                                                <div class="glyph-identity">
+                                                    <h3><?php echo htmlspecialchars($glyph['glyph_name']); ?></h3>
+                                                </div>
+                                                <div class="glyph-info-compact">
+                                                    <div>Owner: <?php echo htmlspecialchars($glyph['OWNER'] ?? 'SYSTEM'); ?></div>
+                                                    <div style="color: var(--accent-green);">
+                                                        GENS: <?php echo $glyph['ITERATIONS'] ?? '0'; ?> | PEAK: <?php echo $glyph['PEAK'] ?? '0'; ?>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="glyph-preview" data-pattern='<?php echo $glyph['BIN'] ?? '0'; ?>'>
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                <?php endforeach; ?>
+
+                            </div>
+                        <?php endforeach; ?>
                     </div>
                 </div>
 
@@ -453,8 +586,10 @@
 
     <script>
 
+        let firstDraw = null;
         let phase1 = null;
         let phase2 = null;
+        let finalDraw = null;
         let phase3 = null;
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -462,17 +597,22 @@
             let s = getURLParameter('series_id');
             if (s){
 
+                firstDraw = <?php echo json_encode($firstDraw); ?>;
                 phase1 = <?php echo json_encode($phase1); ?>;
                 phase2 = <?php echo json_encode($phase2); ?>;
+                finalDraw = <?php echo json_encode($finalDraw); ?>;
                 phase3 = <?php echo json_encode($phase3); ?>;
 
+                console.table(firstDraw);
                 console.table(phase1);
                 console.table(phase2);
+                console.table(finalDraw);
                 console.table(phase3);
 
                 // indicate weekly series id in the page title
                 document.getElementById("weekNumber").innerText = s;
 
+                if (firstDraw.length > 0){ renderGlyphPreviews(); }
                 if (phase1.length > 0){ populatePhase(1); }
                 if (phase2.length > 0){ populatePhase(2); }
                 if (phase3.length > 0){ populatePhase(3); }
@@ -496,6 +636,33 @@
 
             return paramValue;
 
+        }
+
+        function renderGlyphPreviews() {
+            document.querySelectorAll('.glyph-preview').forEach(container => {
+                // Find the parent card to get the hash
+                const card = container.closest('.glyph-matrix-card');
+                const hash = card.getAttribute('data-originHash');
+                
+                // Extract hex color (chars 4-9 are indices 3-8 in 0-based indexing)
+                // If the hash is not long enough, fallback to green
+                const hexColor = (hash && hash.length >= 9) ? '#' + hash.substring(3, 9) : 'var(--accent-green)';
+                
+                const pattern = container.getAttribute('data-pattern');
+                const size = 16;
+                let svg = `<svg width="40" height="40" viewBox="0 0 ${size} ${size}">`;
+                
+                for (let i = 0; i < pattern.length; i++) {
+                    if (pattern[i] === '1') {
+                        const x = i % size;
+                        const y = Math.floor(i / size);
+                        // Apply the extracted hex color here
+                        svg += `<rect x="${x}" y="${y}" width="0.8" height="0.8" fill="${hexColor}" />`;
+                    }
+                }
+                svg += `</svg>`;
+                container.innerHTML = svg;
+            });
         }
 
         function populatePhase(myPhase){

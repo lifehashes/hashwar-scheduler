@@ -665,7 +665,7 @@ ORDER BY group_label ASC;");
                 All hail to the <text style="color: var(--accent-green);">National Institute of Standards and Technology</text>!
             </p>
 
-            <h3 style="font-size: 0.8rem; margin-bottom: 5px; text-transform: uppercase; color: var(--frame-grey);">NIST Pulse Output:</h3>
+            <h3 style="font-size: 0.8rem; margin-bottom: 5px; text-transform: uppercase; color: var(--frame-grey);">NIST Pulse <span id="pulseID"></span></h3>
             <div class="seed-display-box" id="raw-pulse-box">..oo.o.o...o.oo.oo.oo..o.o....oo...o.AWAITING QUANTUM HARVEST.o...o...oo.oo...o...o.o.oo.oooo.o.....o.oo.o..o.ooo.o...o.o...oo...</div>
 
             <h3 style="font-size: 0.8rem; margin-bottom: 5px; text-transform: uppercase; color: var(--frame-grey);">Compressed Engine Seed (FNV-1a 32-bit):</h3>
@@ -1003,6 +1003,8 @@ ORDER BY group_label ASC;");
                 checkButtonReadiness();
 
                 console.log(`[THE OVERSEER] Input timestamp ${currentTimestamp} -> NIST Full Hex for Pulse ID ${pulseIndex}: ${rawHex} -> Compression Stage: FNV-1a Hash -> INT(11) Signed Seed: ${engineSeed}`);
+                document.getElementById("pulseID").innerText = `(ID ${pulseIndex}):`;
+
             })
             .catch(error => {
                 console.warn(error);

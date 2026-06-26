@@ -162,6 +162,64 @@ header {
     margin-bottom: 15px;
 }
 
+/* Compact card layout */
+.glyph-matrix-card {
+    background: var(--panel-bg);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 8px 10px;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.glyph-matrix-card.offline {
+    opacity: 0.15;
+    filter: grayscale(1);
+    pointer-events: none; /* Prevents interaction if needed */
+}
+
+.glyph-matrix-card:hover {
+    border-color: var(--accent-green);
+    background: rgba(66, 244, 133, 0.05);
+}
+
+.glyph-identity h3 {
+    margin: 0;
+    color: #fff;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+}
+
+.glyph-info-compact {
+    font-size: 0.65rem;
+    color: #888;
+    font-family: 'Courier New', monospace;
+    margin-top: 4px;
+}
+
+.glyph-preview {
+    width: 40px;
+    height: 40px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bracket-draw-view .glyph-matrix-card:nth-of-type(even) {
+    margin-bottom: 24px;
+}
+
+.bracket-draw-view .glyph-matrix-card:last-of-type {
+    margin-bottom: 0;
+}
+
+.bracket-draw-view .glyph-matrix-card{
+    background-color:#111a1a;
+}
+
 /* --- SWITCHING CONTROL SYSTEM ARCHITECTURE --- */
 #tab-1:checked ~ .tab-headers label[for="tab-1"],
 #tab-2:checked ~ .tab-headers label[for="tab-2"],
