@@ -329,7 +329,7 @@
                 <div id="content-2" class="tab-content">
                     <h2>[01 // GROUP MATCHES]</h2>
                     <div class="scaffolding-blueprint">
-                        [NETWORK MATRIX READY]: Round-Robin Tournaments where every Glyph plays every other Glyphs in the same group twice (56 matches total)
+                        [NETWORK MATRIX READY]: Round-Robin Tournaments where every Glyph plays every other Glyph in the same group twice (56 matches total)
                     </div>
                     <div class="groups-container">
                         <?php foreach (['A', 'B', 'C', 'D'] as $groupLetter): ?>
