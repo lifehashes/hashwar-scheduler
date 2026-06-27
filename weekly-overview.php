@@ -783,9 +783,11 @@
                     // 3. Populate Player 2
                     slots[1].innerHTML = `<span>${match.p2_glyph_name}</span><span class="score">${match.total_p2}</span>`;
                     if (parseInt(match.p2_win) === 1) {
-                        slots[1].classList.add('winner-highlight');
+                        slots[1].style.borderLeft = "2px solid var(--accent-green)"; 
+                        slots[0].style.borderLeft = "2px solid #f44242";
                     } else {
-                        slots[1].classList.remove('winner-highlight');
+                        slots[0].style.borderLeft = "2px solid var(--accent-green)"; 
+                        slots[1].style.borderLeft = "2px solid #f44242";
                     }
                 });
 
