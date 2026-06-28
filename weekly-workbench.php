@@ -700,13 +700,14 @@ ORDER BY group_label ASC;");
 </div>
 
 <div id="draw-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:1000; padding:40px; box-sizing:border-box;">
-    <h2 style="color:var(--accent-green); text-align:center;">INITIATING QUANTUM SHUFFLE...</h2>
+    <h2 style="color:var(--accent-green); text-align:center;" id="first-draw-title">INITIATING QUANTUM SHUFFLE...</h2>
     <div id="draw-columns" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:20px; height:80vh; overflow:hidden;">
         <div id="col-MONDAY" class="group-col"><h3>GROUP A (MONDAY)</h3></div>
         <div id="col-TUESDAY" class="group-col"><h3>GROUP B (TUESDAY)</h3></div>
         <div id="col-WEDNESDAY" class="group-col"><h3>GROUP C (WEDNESDAY)</h3></div>
         <div id="col-THURSDAY" class="group-col"><h3>GROUP D (THURSDAY)</h3></div>
     </div>
+    <div id="first-draw-link"></div>
 </div>
 
 <div id="tournament-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(6, 12, 12, 0.95); z-index:1000; padding:30px; box-sizing:border-box; font-family:monospace; color:#a3b8cc;">
@@ -914,6 +915,9 @@ ORDER BY group_label ASC;");
                     clone.style.opacity = '1';
                 }
             }
+
+            document.getElementById("first-draw-title").innerText = "SHUFFLE COMPLETE.";
+            document.getElementById("first-draw-link").innerHTML = `<a href="https://lifehashes.net/hashwar-scheduler/weekly-overview.php?series_id=${result.series_id}" target="_blank">WEEKLY SERIES OVERVIEW</a>`;
 
             // console.log("[RND DRAW] Assignment complete:", groups);
             return groups;
