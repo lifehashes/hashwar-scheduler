@@ -712,7 +712,7 @@ ORDER BY group_label ASC;");
 
 <div id="tournament-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(6, 12, 12, 0.95); z-index:1000; padding:30px; box-sizing:border-box; font-family:monospace; color:#a3b8cc;">
     
-    <h2 style="color:#00ffcc; text-align:center; font-size: 2rem; letter-spacing: 2px; margin-bottom: 30px; text-shadow: 0 0 10px rgba(0,255,204,0.3);">
+    <h2 style="color:#00ffcc; text-align:center; font-size: 2rem; letter-spacing: 2px; margin-bottom: 30px; text-shadow: 0 0 10px rgba(0,255,204,0.3);" id="final-draw-title">
         INITIATING QUANTUM SHUFFLE...
     </h2>
     
@@ -1207,6 +1207,8 @@ ORDER BY group_label ASC;");
             clone.style.opacity = '1';
 
         }
+
+        document.getElementById("final-draw-title").innerText = "SHUFFLE COMPLETE.";
 
         let package = [];
         for (let i = 0; i < finalSetOutput.length; i++){
