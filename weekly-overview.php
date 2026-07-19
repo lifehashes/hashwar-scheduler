@@ -126,6 +126,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HASHWAR // NETWORK CONSOLE</title>
     <link rel="stylesheet" href="styles.css">
+    <style>
+        #gamestatus {
+            display: flex;
+            justify-content: space-between;
+            align-items: center; /* Keeps things perfectly vertically aligned */
+            width: 100%;         /* Ensures it stretches across the entire header line */
+        }
+        a:link, a:visited {	color: var(--accent-green); }
+		a:hover { box-shadow: 0 0 20px var(--accent-green); }
+    </style>
 </head>
 <body>
 
@@ -135,7 +145,14 @@
         <!-- HEADER READOUTS -->
         <header>
             <div class="title">Hashwar Series // Week <span id="weekNumber">-</span></div>
-            <div id="gamestatus">Weekly Overview (<span id="week-start">dd.mm.yyyy</span> - <span id="week-end">dd.mm.yyyy</span>)</div>
+            <div id="gamestatus">
+                <span class="status-text">
+                    Weekly Overview ( <span id="week-start">dd.mm.yyyy</span> - <span id="week-end">dd.mm.yyyy</span> )
+                </span>
+                <span class="back-link">
+                    <a href="https://lifehashes.net/" target="_parent">[ BACK ]</a>
+                </span>
+            </div>
         </header>
 
         <!-- CONTROL PANEL WORKSPACE -->
