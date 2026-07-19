@@ -851,6 +851,122 @@ ORDER BY group_label ASC;");
             const j = Math.floor(rng() * (i + 1));
             [eligibleGlyphs[i], eligibleGlyphs[j]] = [eligibleGlyphs[j], eligibleGlyphs[i]];
         }
+
+        // 2. Select 32 Glyphs while enforcing a max limit of 4 per owner
+        const finalSet = [];
+        const ownerCounts = {};
+
+        for (const glyph of eligibleGlyphs) {
+            if (finalSet.length === 32) break;
+
+            // Fallback to text parsing if you skipped step 1
+            const owner = glyph.getAttribute('data-owner') || 
+                        glyph.querySelector('.glyph-info-compact div').innerText.replace('Owner:', '').trim();
+
+            ownerCounts[owner] = ownerCounts[owner] || 0;
+
+            if (ownerCounts[owner] < 4) {
+                finalSet.push(glyph);
+                ownerCounts[owner]++;
+            }
+        }
+
+        // Edge case safeguard
+        if (finalSet.length < 32) {
+            alert(`Critial Filter Error: Enforcing the 4-glyph-per-owner cap left only ${finalSet.length} valid choices out of the filtered list. Please loosen your generation/peak filter rules!`);
+            return;
+        }
+
+        // second shuffle to scatter capped owner across all four days
+        for (let i = finalSet.length - 1; i > 0; i--) {
+            const j = Math.floor(rng() * (i + 1));
+            [finalSet[i], finalSet[j]] = [finalSet[j], finalSet[i]];
+        }
+
+        console.log("[weekly-overview.php] executeRndDraw(): Assignment complete with owner limits enforced:", ownerCounts);
+
+        // 3. Assign shuffled deck to groups
+        const groups = {
+            'MONDAY': finalSet.slice(0, 8),
+            'TUESDAY': finalSet.slice(8, 16),
+            'WEDNESDAY': finalSet.slice(16, 24),
+            'THURSDAY': finalSet.slice(24, 32)
+        };
+
+        // 3a. Create a simplified package
+        const labels = ['A', 'B', 'C', 'D'];
+        const groupSize = 8; 
+        const simplifiedPackage = [];
+
+        labels.forEach((label, index) => {
+            const start = index * groupSize;
+            const end = start + groupSize;
+            const groupGlyphs = finalSet.slice(start, end);
+            
+            groupGlyphs.forEach(glyph => {
+                simplifiedPackage.push({
+                    name: glyph.querySelector('h3').innerText,
+                    group: label, 
+                    phase: 1
+                });
+            });
+        });
+
+        // 3b. Save package to database
+        console.log("Saving to database...");        
+        const response = await fetch('php/save-draw.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ participants: simplifiedPackage })
+        });
+
+        const result = await response.json();
+        if (result.status === 'success') {
+            console.log('Draw saved! Series ID: ' + result.series_id);
+
+            // 4. Now animate using the 'groups' object
+            const dayKeys = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY'];
+            const modal = document.getElementById('draw-modal');
+            modal.style.display = 'block';
+
+            for (const day of dayKeys) {
+                const col = document.getElementById(`col-${day}`); 
+                
+                for (const glyph of groups[day]) {
+                    const clone = glyph.cloneNode(true);
+                    clone.style.opacity = '0';
+                    col.appendChild(clone);
+                    
+                    await new Promise(r => setTimeout(r, 50));
+                    clone.style.transition = 'opacity 0.3s';
+                    clone.style.opacity = '1';
+                }
+            }
+
+            document.getElementById("first-draw-title").innerText = "SHUFFLE COMPLETE.";
+            document.getElementById("first-draw-link").innerHTML = `<a href="https://lifehashes.net/hashwar-scheduler/weekly-overview.php?series_id=${result.series_id}" target="_blank">WEEKLY SERIES OVERVIEW</a>`;
+
+            return groups;
+
+        } else {
+            console.error('Failed to save draw:', result.message);
+        }
+    }
+
+    async function executeRndDrawOld() {
+        const status = document.getElementById('tva-status').innerText;
+        const rawSeed = parseInt(document.getElementById('coerced-seed-box').innerText);
+        const engineSeed = Math.abs(rawSeed);
+        const eligibleGlyphs = Array.from(document.querySelectorAll('.glyph-matrix-card:not(.offline)'));
+
+        if (status !== 'LOCKED' || eligibleGlyphs.length < 32) return;
+
+        // 1. Initialize seeded PRNG and shuffle
+        const rng = seededRandom(engineSeed);
+        for (let i = eligibleGlyphs.length - 1; i > 0; i--) {
+            const j = Math.floor(rng() * (i + 1));
+            [eligibleGlyphs[i], eligibleGlyphs[j]] = [eligibleGlyphs[j], eligibleGlyphs[i]];
+        }
         // console.log("[weekly-overview.php] executeRndDraw(): Number of elligible Glyphs to draw from: " + eligibleGlyphs.length);
 
         // 2. Assign shuffled deck to groups
