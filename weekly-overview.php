@@ -1,7 +1,21 @@
 <?php
 
     include_once __DIR__ . '/../../priv/db_conf_laniakea.php';
-    $series_id = isset($_GET['series_id']) && is_numeric($_GET['series_id']) ? (int)$_GET['series_id'] : null;
+
+    // $series_id = isset($_GET['series_id']) && is_numeric($_GET['series_id']) ? (int)$_GET['series_id'] : null;
+    // 1. Check if series_id was passed via URL parameter
+    if (isset($_GET['series_id']) && is_numeric($_GET['series_id'])) {
+        $series_id = (int)$_GET['series_id'];
+    } else {
+        // 2. Fallback: Automatically query the database for the maximum (latest) series_id
+        try {
+            $latestStmt = $pdo->query("SELECT MAX(series_id) AS latest FROM series_participants");
+            $result = $latestStmt->fetch(PDO::FETCH_ASSOC);
+            $series_id = $result['latest'] ? (int)$result['latest'] : null;
+        } catch (PDOException $e) {
+            $series_id = null;
+        }
+    }
 
     /* First Draw (assigning 32 Glyphs to 4 groups) */
     if ($series_id){
@@ -20,7 +34,7 @@
         $query->execute([$series_id]);
         $firstDraw = $query->fetchAll(PDO::FETCH_ASSOC);
     } else {
-        // no parameter provided
+        $firstDraw = [];
     }
 
     /* Phase 1 (Group Phase) */
@@ -611,7 +625,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
 
-            let s = getURLParameter('series_id');
+            let s = getURLParameter('series_id') || <?php echo json_encode($series_id); ?>;
             if (s){
 
                 firstDraw = <?php echo json_encode($firstDraw); ?>;
