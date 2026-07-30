@@ -164,7 +164,7 @@
                     Weekly Overview ( <span id="week-start">dd.mm.yyyy</span> - <span id="week-end">dd.mm.yyyy</span> )
                 </span>
                 <span class="back-link">
-                    <a href="https://lifehashes.net/" target="_parent">[ BACK ]</a>
+                    <a href="https://lifehashes.net/hashwar-scheduler/weekly-series.php" target="_parent">[ BACK ]</a>
                 </span>
             </div>
         </header>
