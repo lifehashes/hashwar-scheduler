@@ -1,11 +1,32 @@
 <?php
 // Global Error Debugging Switch
+/*
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
+*/
 
 // Database Connection
+session_start();
 include_once __DIR__ . '/../../priv/db_conf_laniakea.php';
+
+// 1. AUTHENTICATION GUARD: Verify the operator is logged in (same as user.php)
+if (!isset($_SESSION['user_id'])) {
+    header("Location: index.php");
+    exit;
+}
+
+// 2. Define allowed operator usernames
+$allowed_operators = ['hash0'];
+
+if (!in_array($_SESSION['username'], $allowed_operators, true)) {
+    http_response_code(403);
+    exit('ACCESS_DENIED // UNAUTHORIZED_OPERATOR');
+}
+
+// Safely extract operator details for use in the UI/backend
+$current_operator = htmlspecialchars($_SESSION['username']);
+$operator_id      = htmlspecialchars($_SESSION['user_id']);
 
 // Fetch all available Conway Glyphs
 $stmt = $pdo->query("SELECT BATTLE_NAME, ITERATIONS as GENERATIONS, PEAK, MAX, OWNER, BIN, HASH FROM GLYPHREG ORDER BY BATTLE_NAME ASC");
@@ -619,6 +640,38 @@ foreach ($fMatches as $m) {
             background: var(--accent-green);
         }
 
+        /* Container to handle spacing at the bottom */
+        .button-group-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px; /* Vertical gap between the 4-button row and FINAL DRAW */
+            width: 100%;
+            margin-top: auto; /* Keeps buttons pinned to the bottom if card uses flex column */
+        }
+
+        /* 4-column grid for Group A-D */
+        .button-row-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px; /* Space between the group buttons */
+            width: 100%;
+        }
+
+        /* Adjust padding/font size for tight fit in 4 columns */
+        .status-badge-hz.btn-compact {
+            padding: 6px 2px;
+            font-size: 0.7rem;
+            text-align: center;
+            width: 100%;
+        }
+
+        /* Full width row for FINAL DRAW */
+        .status-badge-hz.btn-full {
+            width: 100%;
+            padding: 8px 0;
+            text-align: center;
+        }
+
     </style>
 </head>
 <body>
@@ -665,12 +718,13 @@ foreach ($fMatches as $m) {
 
                 <?php 
                 $rrDays = [
-                    'MONDAY'    => ['GROUP A', '8RR', 'Initial matrix loops activate to compile base states.'],
-                    'TUESDAY'   => ['GROUP B', '8RR', 'Standings solidify over heavy computing blocks.'],
-                    'WEDNESDAY' => ['GROUP C', '8RR', 'Critical point-margin deltas build across columns.'],
-                    'THURSDAY'  => ['GROUP D',  '8RR', 'Group finalization. Top 3 advance, 4-7 drop to Friday.']
+                    'MONDAY'    => ['GROUP A', '8RR', 'Initial matrix loops activate to compile base states.', 'A'],
+                    'TUESDAY'   => ['GROUP B', '8RR', 'Standings solidify over heavy computing blocks.', 'B'],
+                    'WEDNESDAY' => ['GROUP C', '8RR', 'Critical point-margin deltas build across columns.', 'C'],
+                    'THURSDAY'  => ['GROUP D', '8RR', 'Group finalization. Top 3 advance, 4-7 drop to Friday.', 'D']
                 ];
                 foreach ($rrDays as $dayName => $info): 
+                    $groupLetter = $info[3]; // Extract 'A', 'B', 'C', or 'D'
                 ?>
                 <div class="day-protocol-block-hz">
                     <div class="day-identity-hz">
@@ -685,7 +739,8 @@ foreach ($fMatches as $m) {
                                 <polygon points="55,10 87,23 100,55 87,87 55,100 23,87 10,55 23,23" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
                                 <path d="M 55 10 L 100 55 M 55 10 L 55 100 M 55 10 L 10 55 M 87 23 L 87 87 M 87 23 L 23 87 M 100 55 L 10 55 M 23 23 L 87 87" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
                                 
-                                <circle cx="55" cy="10" r="4.5" fill="#42f485"/> <circle cx="87" cy="23" r="4.5" fill="#42f485"/> <circle cx="100" cy="55" r="4.5" fill="#42f485"/> <circle cx="87" cy="87" r="4.5" fill="#f4d042"/> <circle cx="55" cy="100" r="4.5" fill="#f4d042"/> <circle cx="23" cy="87" r="4.5" fill="#f4d042"/> <circle cx="10" cy="55" r="4.5" fill="#f4d042"/> <circle cx="23" cy="23" r="4.5" fill="#ef4444"/> </svg>
+                                <circle cx="55" cy="10" r="4.5" fill="#42f485"/> <circle cx="87" cy="23" r="4.5" fill="#42f485"/> <circle cx="100" cy="55" r="4.5" fill="#42f485"/> <circle cx="87" cy="87" r="4.5" fill="#f4d042"/> <circle cx="55" cy="100" r="4.5" fill="#f4d042"/> <circle cx="23" cy="87" r="4.5" fill="#f4d042"/> <circle cx="10" cy="55" r="4.5" fill="#f4d042"/> <circle cx="23" cy="23" r="4.5" fill="#ef4444"/>
+                            </svg>
                         </div>
 
                         <table class="micro-scoreboard">
@@ -704,7 +759,11 @@ foreach ($fMatches as $m) {
                             </tbody>
                         </table>
                     </div>
-                    <button class="status-badge-hz" onclick="">EVALUATE</button>
+                    
+                    <!-- Updated Button Call -->
+                    <button class="status-badge-hz" onclick="openEngineWithSeriesId(1, '<?php echo $groupLetter; ?>')">
+                        GROUP <?php echo $groupLetter; ?>
+                    </button>
                 </div>
                 <?php endforeach; ?>
 
@@ -738,7 +797,16 @@ foreach ($fMatches as $m) {
                             16 variants map into 4 parallel sudden-death trees. 4 winners secure the final Saturday slots.
                         </p>
                     </div>
-                    <button class="status-badge-hz" onclick="">EVALUATE</button>
+                    <!-- BUTTON SECTION CONTAINER -->
+                    <div class="button-group-container">
+                        <div class="button-row-grid">
+                            <button class="status-badge-hz btn-compact" onclick="openEngineWithSeriesId(2, 'A');">GRP A</button>
+                            <button class="status-badge-hz btn-compact" onclick="openEngineWithSeriesId(2, 'B');">GRP B</button>
+                            <button class="status-badge-hz btn-compact" onclick="openEngineWithSeriesId(2, 'C');">GRP C</button>
+                            <button class="status-badge-hz btn-compact" onclick="openEngineWithSeriesId(2, 'D');">GRP D</button>
+                        </div>
+                        <button class="status-badge-hz btn-full" onclick="">FINAL DRAW</button>
+                    </div>
                 </div>
 
                 <div class="day-protocol-block-hz" style="border-color: rgba(66, 244, 133, 0.2);">
@@ -786,7 +854,7 @@ foreach ($fMatches as $m) {
                             16-variant converging knockout matrix executes to calculate the definitive Weekly Series Champion.
                         </p>
                     </div>
-                    <button class="status-badge-hz" onclick="">EVALUATE</button>
+                    <button class="status-badge-hz" onclick="openEngineWithSeriesId(3, 'f');">GRAND FINALE</button>
                 </div>
             </div>
 
@@ -1060,6 +1128,34 @@ foreach ($fMatches as $m) {
 
         // console.log(`[FILTER] Applied: Gen(${minGen}-${maxGen}), Peak(${minPeak}-${maxPeak})`);
     }
+
+function openEngineWithSeriesId(myPhase, myGroup) {
+    // 1. Base URL
+    const baseUrl = 'http://lifehashes.net/adversarial-conway-dev/index.php';
+    
+    // 2. Create a URL object to cleanly append parameters
+    const url = new URL(baseUrl);
+
+    // 3. Get existing series_id from current page URL
+    const currentParams = new URLSearchParams(window.location.search);
+    const seriesId = currentParams.get('series_id');
+
+    // 4. Append series_id if it exists
+    if (seriesId) {
+        url.searchParams.append('series_id', seriesId);
+    }
+
+    // 5. Append phase and group (if provided)
+    if (myPhase !== undefined && myPhase !== null) {
+        url.searchParams.append('phase', myPhase);
+    }
+    if (myGroup !== undefined && myGroup !== null) {
+        url.searchParams.append('group', myGroup);
+    }
+
+    // 6. Open the full URL in a new tab
+    window.open(url.toString(), '_blank');
+}
     
     async function executeRndDraw() {
         const status = document.getElementById('tva-status').innerText;
