@@ -3,10 +3,12 @@ session_start();
 include_once __DIR__ . '/../../priv/db_conf_laniakea.php';
 
 // Protection Guard: Ensure user is logged in
+/*
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
     exit;
 }
+    */
 
 $current_operator = htmlspecialchars($_SESSION['username'] ?? 'UNKNOWN');
 

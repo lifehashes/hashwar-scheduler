@@ -805,7 +805,7 @@ foreach ($fMatches as $m) {
                             <button class="status-badge-hz btn-compact" onclick="openEngineWithSeriesId(2, 'C');">GRP C</button>
                             <button class="status-badge-hz btn-compact" onclick="openEngineWithSeriesId(2, 'D');">GRP D</button>
                         </div>
-                        <button class="status-badge-hz btn-full" onclick="">FINAL DRAW</button>
+                        <button class="status-badge-hz btn-full" onclick="compileFinalTourneyParticipants();">FINAL DRAW</button>
                     </div>
                 </div>
 
