@@ -985,8 +985,20 @@ foreach ($fMatches as $m) {
                     <input type="text" placeholder="0x..." class="full-width-input">
 
                     <button class="action-button" id="apply-filter-btn" onClick="applyFilter();">Apply Filter</button>
+                </div>  
+            </div>
+
+            <div style="margin-top: 30px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 20px;">
+                <h3 style="font-size: 0.8rem; margin-bottom: 15px; text-transform: uppercase; color: var(--accent-green);">[ LAYER 02 ] SCORE (RE-)CALCULATION</h3>
+                
+                <div class="filter-stack">
+                    <button class="action-button" id="trigger-recalc-btn" onClick="triggerScoreRecalc();">
+                        TRIGGER SCORE RE-CALC
+                    </button>
+                    <div id="recalc-status" style="font-size: 0.7rem; color: #888; text-align: center; min-height: 1.2em;"></div>
                 </div>                
             </div>
+           
         </div>
     </div>
 </div>
@@ -1670,6 +1682,47 @@ function openEngineWithSeriesId(myPhase, myGroup) {
             body: JSON.stringify({ participants: package, series: seriesId })
         });
 
+    }
+
+    async function triggerScoreRecalc() {
+        const btn = document.getElementById('trigger-recalc-btn');
+        const statusEl = document.getElementById('recalc-status');
+
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.innerText = 'RE-CALCULATING...';
+        statusEl.style.color = '#f4d042';
+        statusEl.innerText = 'COMPUTING MATRIX SCORES...';
+
+        try {
+            // Points to your API file inside the api/ folder
+            const response = await fetch('api/recalc-scores.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                statusEl.style.color = 'var(--accent-green)';
+                statusEl.innerText = 'RE-CALCULATION COMPLETE';
+                
+                console.log('[SCORE RE-CALC BREAKDOWN]', result.data);
+
+                // Optional: Reload after 1.5 seconds to refresh page stats
+                // setTimeout(() => window.location.reload(), 1500);
+            } else {
+                throw new Error(result.error || 'ENGINE_RECALC_FAILED');
+            }
+        } catch (err) {
+            console.error('[SCORE RE-CALC ERROR]', err);
+            statusEl.style.color = '#ef4444';
+            statusEl.innerText = 'ERR: ' + err.message;
+        } finally {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btn.innerText = 'TRIGGER SCORE RE-CALC';
+        }
     }
 
 </script>
