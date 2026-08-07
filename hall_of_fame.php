@@ -123,6 +123,54 @@ usort($decoratedGlyphs, function($a, $b) {
     if ($a['series'] !== $b['series'])      return $b['series'] <=> $a['series'];
     return $b['PEAK'] <=> $a['PEAK'];
 });
+
+// 5. Fetch User Scores from `users` table
+$usersStmt = $pdo->query("SELECT username, score FROM users");
+$userScores = [];
+while ($row = $usersStmt->fetch(PDO::FETCH_ASSOC)) {
+    $userScores[$row['username']] = (int)$row['score'];
+}
+
+// 6. Aggregate Medals, Series, and Score per Owner
+$ownerStats = [];
+
+foreach ($allGlyphs as $glyph) {
+    $owner = $glyph['OWNER'] ?: 'SYSTEM';
+    $upperName = strtoupper($glyph['BATTLE_NAME']);
+    
+    $gold   = $medals[$upperName]['gold']   ?? 0;
+    $silver = $medals[$upperName]['silver'] ?? 0;
+    $bronze = $medals[$upperName]['bronze'] ?? 0;
+    $series = $seriesCounts[$upperName]   ?? 0;
+
+    if (!isset($ownerStats[$owner])) {
+        $ownerStats[$owner] = [
+            'username' => $owner,
+            'score'    => $userScores[$owner] ?? 0,
+            'gold'     => 0,
+            'silver'   => 0,
+            'bronze'   => 0,
+            'series'   => 0,
+            'glyphs'   => 0
+        ];
+    }
+
+    $ownerStats[$owner]['gold']   += $gold;
+    $ownerStats[$owner]['silver'] += $silver;
+    $ownerStats[$owner]['bronze'] += $bronze;
+    $ownerStats[$owner]['series'] += $series;
+    $ownerStats[$owner]['glyphs'] += 1;
+}
+
+// 7. Sort Owners: Gold > Silver > Bronze > Score > Series Participation
+usort($ownerStats, function($a, $b) {
+    if ($a['gold'] !== $b['gold'])     return $b['gold'] <=> $a['gold'];
+    if ($a['silver'] !== $b['silver']) return $b['silver'] <=> $a['silver'];
+    if ($a['bronze'] !== $b['bronze']) return $b['bronze'] <=> $a['bronze'];
+    if ($a['score'] !== $b['score'])   return $b['score'] <=> $a['score'];
+    return $b['series'] <=> $a['series'];
+});
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -190,6 +238,57 @@ usort($decoratedGlyphs, function($a, $b) {
             margin-left: 4px;
             gap: 1px;
         }
+
+        /* Container for splitting the right side vertically */
+        .right-split-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            height: 100%;
+        }
+
+        .split-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0; /* Enables internal overflow scrolling */
+            background: var(--panel-bg);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 10px;
+        }
+
+        .split-section-title {
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: var(--accent-green);
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.15);
+        }
+
+        .scroll-list {
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding-right: 4px;
+        }
+
+        .owner-card {
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 8px 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .owner-card:hover {
+            border-color: var(--accent-green);
+            background: rgba(66, 244, 133, 0.05);
+        }
+
     </style>
 </head>
 <body>

@@ -162,6 +162,53 @@ try {
         return $b['PEAK'] <=> $a['PEAK'];
     });
 
+    // 6. Fetch User Scores from `users` table
+    $usersStmt = $pdo->query("SELECT username, score FROM users");
+    $userScores = [];
+    while ($row = $usersStmt->fetch(PDO::FETCH_ASSOC)) {
+        $userScores[$row['username']] = (int)$row['score'];
+    }
+
+    // 7. Aggregate Medals, Series Participations, and Scores per Owner
+    $ownerStats = [];
+
+    foreach ($allGlyphs as $glyph) {
+        $owner     = $glyph['OWNER'] ?: 'SYSTEM';
+        $upperName = strtoupper($glyph['BATTLE_NAME']);
+        
+        $gold   = $medals[$upperName]['gold']   ?? 0;
+        $silver = $medals[$upperName]['silver'] ?? 0;
+        $bronze = $medals[$upperName]['bronze'] ?? 0;
+        $series = $seriesCounts[$upperName]   ?? 0;
+
+        if (!isset($ownerStats[$owner])) {
+            $ownerStats[$owner] = [
+                'username' => $owner,
+                'score'    => $userScores[$owner] ?? 0,
+                'gold'     => 0,
+                'silver'   => 0,
+                'bronze'   => 0,
+                'series'   => 0,
+                'glyphs'   => 0
+            ];
+        }
+
+        $ownerStats[$owner]['gold']   += $gold;
+        $ownerStats[$owner]['silver'] += $silver;
+        $ownerStats[$owner]['bronze'] += $bronze;
+        $ownerStats[$owner]['series'] += $series;
+        $ownerStats[$owner]['glyphs'] += 1;
+    }
+
+    // 8. Sort Owners: Gold > Silver > Bronze > User Score > Total Series
+    usort($ownerStats, function($a, $b) {
+        if ($a['gold'] !== $b['gold'])     return $b['gold'] <=> $a['gold'];
+        if ($a['silver'] !== $b['silver']) return $b['silver'] <=> $a['silver'];
+        if ($a['bronze'] !== $b['bronze']) return $b['bronze'] <=> $a['bronze'];
+        if ($a['score'] !== $b['score'])   return $b['score'] <=> $a['score'];
+        return $b['series'] <=> $a['series'];
+    });
+
 } catch (PDOException $e) {
     echo "<div style='color: #ff5555; background: #111; padding: 20px; font-family: monospace; border: 1px solid #ff5555;'>";
     echo "<h3>DATABASE ERROR ENCOUNTERED:</h3>";
@@ -300,6 +347,80 @@ try {
             box-shadow: 0 0 12px rgba(255, 77, 77, 0.3);
         }
 
+        /* Vertical flex container for the right column */
+        .hub-right-column {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Individual split card container */
+        .right-split-box {
+            display: flex;
+            flex-direction: column;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 12px;
+            border-radius: 4px;
+        }
+
+        .split-scroll-area {
+            max-height: 380px;
+            overflow-y: auto;
+            padding-right: 4px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* Owner Aggregate Row Styling */
+        .owner-matrix-card {
+            background: var(--panel-bg);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 8px 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s ease;
+        }
+
+        .owner-matrix-card:hover {
+            border-color: var(--accent-green);
+            background: rgba(66, 244, 133, 0.05);
+        }
+
+        .owner-score-badge {
+            text-align: right;
+            font-family: monospace;
+            line-height: 1.1;
+        }
+
+        .owner-score-val {
+            font-size: 0.95rem;
+            font-weight: bold;
+            color: var(--accent-green);
+        }
+
+        /* --- Global Entropy-Style Scrollbars --- */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px; /* Added for horizontal scrollbars if needed */
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #000;
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #222;
+            border: 1px solid rgba(66, 244, 133, 0.2);
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-green);
+        }
+
     </style>
 </head>
 <body>
@@ -368,12 +489,14 @@ try {
                 </div>
             </div>
 
-            <!-- RIGHT HALF: HALL OF FAME -->
+            <!-- RIGHT HALF: VERTICAL SPLIT (GLYPH HOF TOP // OWNER LEADERBOARD BOTTOM) -->
             <div class="hub-right-column">
-                <div class="panel-title" style="margin-bottom:15px;">HALL_OF_FAME // TOP <?php echo count($decoratedGlyphs); ?> DECORATED GLYPHS</div>
 
-                <div class="large-content-box">
-                    <div class="roster-container">
+                <!-- TOP SECTION: INDIVIDUAL GLYPH HALL OF FAME -->
+                <div class="right-split-box">
+                    <div class="panel-title" style="margin-bottom:10px;">HALL_OF_FAME // GLYPH STANDINGS (<?php echo count($decoratedGlyphs); ?>)</div>
+
+                    <div class="split-scroll-area">
                         <?php if (empty($decoratedGlyphs)): ?>
                             <p style="color: #eee; font-family: monospace;">No decorated Glyphs found in database.</p>
                         <?php else: ?>
@@ -383,44 +506,32 @@ try {
                                 $pCount = $glyph['series'];
                             ?>
                                 <div class="glyph-matrix-card" 
-                                     data-gens="<?php echo $glyph['GENERATIONS']; ?>"
-                                     data-peak="<?php echo $glyph['PEAK']; ?>"
-                                     data-originHash="<?php echo htmlspecialchars($glyph['HASH']); ?>"
-                                     data-pattern="<?php echo htmlspecialchars($glyph['BIN']); ?>">
+                                    data-gens="<?php echo $glyph['GENERATIONS']; ?>"
+                                    data-peak="<?php echo $glyph['PEAK']; ?>"
+                                    data-originHash="<?php echo htmlspecialchars($glyph['HASH']); ?>"
+                                    data-pattern="<?php echo htmlspecialchars($glyph['BIN']); ?>">
                                     
-                                    <div style="display: flex; gap: 10px;">
+                                    <div style="display: flex; gap: 10px; align-items: center;">
                                         <div style="flex: 1;">
                                             <div class="glyph-identity" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                                                 <span class="rank-badge <?php echo $rankClass; ?>">#<?php echo sprintf('%02d', $rank); ?></span>
                                                 <h3 style="margin: 0; display: inline-block;"><?php echo htmlspecialchars($glyph['BATTLE_NAME']); ?></h3>
                                                 
                                                 <div class="glyph-badges" style="display: inline-flex; align-items: center; gap: 4px;">
-                                                    <?php if ($glyph['gold'] > 0): ?>
-                                                        <span class="medal-badge medal-gold" title="<?php echo $glyph['gold']; ?> Gold">★ <?php echo $glyph['gold']; ?></span>
-                                                    <?php endif; ?>
-                                                    <?php if ($glyph['silver'] > 0): ?>
-                                                        <span class="medal-badge medal-silver" title="<?php echo $glyph['silver']; ?> Silver">★ <?php echo $glyph['silver']; ?></span>
-                                                    <?php endif; ?>
-                                                    <?php if ($glyph['bronze'] > 0): ?>
-                                                        <span class="medal-badge medal-bronze" title="<?php echo $glyph['bronze']; ?> Bronze">★ <?php echo $glyph['bronze']; ?></span>
-                                                    <?php endif; ?>
+                                                    <?php if ($glyph['gold'] > 0): ?><span class="medal-badge medal-gold" title="<?php echo $glyph['gold']; ?> Gold">★ <?php echo $glyph['gold']; ?></span><?php endif; ?>
+                                                    <?php if ($glyph['silver'] > 0): ?><span class="medal-badge medal-silver" title="<?php echo $glyph['silver']; ?> Silver">★ <?php echo $glyph['silver']; ?></span><?php endif; ?>
+                                                    <?php if ($glyph['bronze'] > 0): ?><span class="medal-badge medal-bronze" title="<?php echo $glyph['bronze']; ?> Bronze">★ <?php echo $glyph['bronze']; ?></span><?php endif; ?>
 
                                                     <div class="chevrons-wrapper">
                                                         <?php 
                                                         if ($pCount > 0) {
                                                             $golds = floor($pCount / 5);
                                                             $greens = $pCount % 5;
-
                                                             for ($i = 0; $i < $golds; $i++) {
-                                                                echo '<svg width="7" height="10" viewBox="0 0 7 10" style="filter: drop-shadow(0 0 3px #f4d042); margin-right: 1px;" title="5 Series Completed">
-                                                                        <polyline points="1,1 6,5 1,9" fill="none" stroke="#f4d042" stroke-width="2.2" stroke-linecap="round"/>
-                                                                      </svg>';
+                                                                echo '<svg width="7" height="10" viewBox="0 0 7 10" style="filter: drop-shadow(0 0 3px #f4d042); margin-right: 1px;"><polyline points="1,1 6,5 1,9" fill="none" stroke="#f4d042" stroke-width="2.2" stroke-linecap="round"/></svg>';
                                                             }
-
                                                             for ($i = 0; $i < $greens; $i++) {
-                                                                echo '<svg width="6" height="10" viewBox="0 0 6 10" style="filter: drop-shadow(0 0 2px var(--accent-green));" title="1 Series Completed">
-                                                                        <polyline points="1,1 5,5 1,9" fill="none" stroke="var(--accent-green)" stroke-width="1.6" stroke-linecap="round"/>
-                                                                      </svg>';
+                                                                echo '<svg width="6" height="10" viewBox="0 0 6 10" style="filter: drop-shadow(0 0 2px var(--accent-green));"><polyline points="1,1 5,5 1,9" fill="none" stroke="var(--accent-green)" stroke-width="1.6" stroke-linecap="round"/></svg>';
                                                             }
                                                         } else {
                                                             echo '<span class="pip-rookie-label">NEW</span>';
@@ -430,28 +541,83 @@ try {
                                                 </div>
                                             </div>
 
-                                            <div class="glyph-info-compact" style="margin-top: 6px;">
-                                                <div>Owner: <?php echo htmlspecialchars($glyph['OWNER'] ?: 'SYSTEM'); ?></div>
-                                                <div style="color: var(--accent-green);">
-                                                    GENS: <?php echo $glyph['GENERATIONS']; ?> | PEAK: <?php echo $glyph['PEAK']; ?>
-                                                </div>
-                                                <div class="efficiency-tag">
-                                                    EFFICIENCY: <?php echo number_format($glyph['efficiency'] * 100, 1); ?>% (<?php echo ($glyph['gold']+$glyph['silver']+$glyph['bronze']); ?> Medals / <?php echo $glyph['series']; ?> Series)
-                                                </div>
+                                            <div class="glyph-info-compact" style="margin-top: 4px;">
+                                                Owner: <?php echo htmlspecialchars($glyph['OWNER'] ?: 'SYSTEM'); ?> | EFF: <?php echo number_format($glyph['efficiency'] * 100, 1); ?>%
                                             </div>
                                         </div>
 
                                         <div class="glyph-preview" data-pattern="<?php echo htmlspecialchars($glyph['BIN']); ?>"></div>
                                     </div>
-
                                 </div>
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </div>
                 </div>
 
-                <div style="border-top: 1px solid rgba(255,255,255,0.05); margin-top: 20px; padding-top: 10px; font-size: 0.55rem; color: var(--frame-grey); text-align: center;">
-                    RANKING HIERARCHY: GOLD > SILVER > BRONZE > MEDAL EFFICIENCY > SERIES PARTICIPATION > PEAK SCORE
+                <!-- BOTTOM SECTION: OPERATOR / OWNER AGGREGATE LEADERBOARD -->
+                <div class="right-split-box">
+                    <div class="panel-title" style="margin-bottom:10px;">OPERATOR_RANKINGS // OWNER AGGREGATE</div>
+
+                    <div class="split-scroll-area">
+                        <?php if (empty($ownerStats)): ?>
+                            <p style="color: #eee; font-family: monospace;">No active owners found.</p>
+                        <?php else: ?>
+                            <?php foreach ($ownerStats as $oIndex => $owner): 
+                                $oRank = $oIndex + 1;
+                                $oRankClass = $oRank === 1 ? 'top-1' : ($oRank === 2 ? 'top-2' : ($oRank === 3 ? 'top-3' : ''));
+                                $oSeries = $owner['series'];
+                            ?>
+                                <div class="owner-matrix-card">
+                                    <div>
+                                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                            <span class="rank-badge <?php echo $oRankClass; ?>">#<?php echo sprintf('%02d', $oRank); ?></span>
+                                            <strong style="color: #fff; font-family: monospace; font-size: 0.85rem; text-transform: uppercase;">
+                                                <?php echo htmlspecialchars($owner['username']); ?>
+                                            </strong>
+                                            
+                                            <div class="glyph-badges" style="display: inline-flex; align-items: center; gap: 4px;">
+                                                <?php if ($owner['gold'] > 0): ?><span class="medal-badge medal-gold">★ <?php echo $owner['gold']; ?></span><?php endif; ?>
+                                                <?php if ($owner['silver'] > 0): ?><span class="medal-badge medal-silver">★ <?php echo $owner['silver']; ?></span><?php endif; ?>
+                                                <?php if ($owner['bronze'] > 0): ?><span class="medal-badge medal-bronze">★ <?php echo $owner['bronze']; ?></span><?php endif; ?>
+
+                                                <!-- Aggregated Owner Chevrons -->
+                                                <div class="chevrons-wrapper">
+                                                    <?php 
+                                                    if ($oSeries > 0) {
+                                                        $oGolds = floor($oSeries / 5);
+                                                        $oGreens = $oSeries % 5;
+                                                        for ($i = 0; $i < $oGolds; $i++) {
+                                                            echo '<svg width="7" height="10" viewBox="0 0 7 10" style="filter: drop-shadow(0 0 3px #f4d042); margin-right: 1px;"><polyline points="1,1 6,5 1,9" fill="none" stroke="#f4d042" stroke-width="2.2" stroke-linecap="round"/></svg>';
+                                                        }
+                                                        for ($i = 0; $i < $oGreens; $i++) {
+                                                            echo '<svg width="6" height="10" viewBox="0 0 6 10" style="filter: drop-shadow(0 0 2px var(--accent-green));"><polyline points="1,1 5,5 1,9" fill="none" stroke="var(--accent-green)" stroke-width="1.6" stroke-linecap="round"/></svg>';
+                                                        }
+                                                    } else {
+                                                        echo '<span class="pip-rookie-label">NEW</span>';
+                                                    }
+                                                    ?>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="glyph-info-compact" style="margin-top: 4px;">
+                                            GLYPHS: <?php echo $owner['glyphs']; ?> | TOTAL SERIES PARTICIPATIONS: <?php echo $owner['series']; ?>
+                                        </div>
+                                    </div>
+
+                                    <!-- User Score Display -->
+                                    <div class="owner-score-badge">
+                                        <div style="font-size: 0.55rem; color: #888;">SCORE</div>
+                                        <div class="owner-score-val"><?php echo number_format($owner['score']); ?></div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <div style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 6px; font-size: 0.55rem; color: var(--frame-grey); text-align: center;">
+                    RANKING HIERARCHY: GOLD > SILVER > BRONZE > USER SCORE > PARTICIPATIONS
                 </div>
             </div>
         </div>
