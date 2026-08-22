@@ -29,7 +29,7 @@ $current_operator = htmlspecialchars($_SESSION['username']);
 $operator_id      = htmlspecialchars($_SESSION['user_id']);
 
 // Fetch all available Conway Glyphs
-$stmt = $pdo->query("SELECT BATTLE_NAME, ITERATIONS as GENERATIONS, PEAK, MAX, OWNER, BIN, HASH FROM GLYPHREG ORDER BY BATTLE_NAME ASC");
+$stmt = $pdo->query("SELECT BATTLE_NAME, ITERATIONS as GENERATIONS, PEAK, MAX, OWNER, BIN, HASH FROM GLYPHREG WHERE GRID_SIZE='16' ORDER BY BATTLE_NAME ASC");
 $glyphs = $stmt->fetchAll();
 
 // Top 3 Glyphs from Phase I
@@ -1141,34 +1141,34 @@ foreach ($fMatches as $m) {
         // console.log(`[FILTER] Applied: Gen(${minGen}-${maxGen}), Peak(${minPeak}-${maxPeak})`);
     }
 
-function openEngineWithSeriesId(myPhase, myGroup) {
-    // 1. Base URL
-    const baseUrl = 'http://lifehashes.net/adversarial-conway-dev/index.php';
-    
-    // 2. Create a URL object to cleanly append parameters
-    const url = new URL(baseUrl);
+    function openEngineWithSeriesId(myPhase, myGroup) {
+        // 1. Base URL
+        const baseUrl = 'http://lifehashes.net/adversarial-conway-dev/index.php';
+        
+        // 2. Create a URL object to cleanly append parameters
+        const url = new URL(baseUrl);
 
-    // 3. Get existing series_id from current page URL
-    const currentParams = new URLSearchParams(window.location.search);
-    const seriesId = currentParams.get('series_id');
+        // 3. Get existing series_id from current page URL
+        const currentParams = new URLSearchParams(window.location.search);
+        const seriesId = currentParams.get('series_id');
 
-    // 4. Append series_id if it exists
-    if (seriesId) {
-        url.searchParams.append('series_id', seriesId);
+        // 4. Append series_id if it exists
+        if (seriesId) {
+            url.searchParams.append('series_id', seriesId);
+        }
+
+        // 5. Append phase and group (if provided)
+        if (myPhase !== undefined && myPhase !== null) {
+            url.searchParams.append('phase', myPhase);
+        }
+        if (myGroup !== undefined && myGroup !== null) {
+            url.searchParams.append('group', myGroup);
+        }
+
+        // 6. Open the full URL in a new tab
+        window.open(url.toString(), '_blank');
     }
-
-    // 5. Append phase and group (if provided)
-    if (myPhase !== undefined && myPhase !== null) {
-        url.searchParams.append('phase', myPhase);
-    }
-    if (myGroup !== undefined && myGroup !== null) {
-        url.searchParams.append('group', myGroup);
-    }
-
-    // 6. Open the full URL in a new tab
-    window.open(url.toString(), '_blank');
-}
-    
+        
     async function executeRndDraw() {
         const status = document.getElementById('tva-status').innerText;
         const rawSeed = parseInt(document.getElementById('coerced-seed-box').innerText);
@@ -1177,24 +1177,54 @@ function openEngineWithSeriesId(myPhase, myGroup) {
 
         if (status !== 'LOCKED' || eligibleGlyphs.length < 32) return;
 
-        // 1. Initialize seeded PRNG and shuffle
-        const rng = seededRandom(engineSeed);
-        for (let i = eligibleGlyphs.length - 1; i > 0; i--) {
-            const j = Math.floor(rng() * (i + 1));
-            [eligibleGlyphs[i], eligibleGlyphs[j]] = [eligibleGlyphs[j], eligibleGlyphs[i]];
-        }
+        // Helper: extract clean owner string
+        const getOwner = (glyph) => {
+            return glyph.getAttribute('data-owner') || 
+                glyph.querySelector('.glyph-info-compact div').innerText.replace('Owner:', '').trim();
+        };
 
-        // 2. Select 32 Glyphs while enforcing a max limit of 4 per owner
+        // 1. Initialize seeded PRNG
+        const rng = seededRandom(engineSeed);
+
+        // Group eligible glyphs by owner
+        const ownerMap = {};
+        eligibleGlyphs.forEach(glyph => {
+            const owner = getOwner(glyph);
+            if (!ownerMap[owner]) ownerMap[owner] = [];
+            ownerMap[owner].push(glyph);
+        });
+
         const finalSet = [];
         const ownerCounts = {};
+        const remainingPool = [];
 
-        for (const glyph of eligibleGlyphs) {
+        // PHASE 1: Guarantee 1 Glyph per unique owner
+        for (const owner in ownerMap) {
+            const glyphs = ownerMap[owner];
+            // Pick 1 random glyph for this owner
+            const chosenIndex = Math.floor(rng() * glyphs.length);
+            const selectedGlyph = glyphs[chosenIndex];
+
+            finalSet.push(selectedGlyph);
+            ownerCounts[owner] = 1;
+
+            // Push unselected glyphs into the remaining pool
+            glyphs.forEach((g, idx) => {
+                if (idx !== chosenIndex) remainingPool.push(g);
+            });
+        }
+
+        // Shuffle the remaining pool using the seeded PRNG
+        for (let i = remainingPool.length - 1; i > 0; i--) {
+            const j = Math.floor(rng() * (i + 1));
+            [remainingPool[i], remainingPool[j]] = [remainingPool[j], remainingPool[i]];
+        }
+
+        // PHASE 2: Fill the rest of the 32 slots while respecting max 4 per owner
+        for (const glyph of remainingPool) {
             if (finalSet.length === 32) break;
 
-            // Fallback to text parsing if you skipped step 1
-            const owner = glyph.getAttribute('data-owner') || 
-                        glyph.querySelector('.glyph-info-compact div').innerText.replace('Owner:', '').trim();
-
+            const owner = getOwner(glyph);
             ownerCounts[owner] = ownerCounts[owner] || 0;
 
             if (ownerCounts[owner] < 4) {
@@ -1205,17 +1235,17 @@ function openEngineWithSeriesId(myPhase, myGroup) {
 
         // Edge case safeguard
         if (finalSet.length < 32) {
-            alert(`Critial Filter Error: Enforcing the 4-glyph-per-owner cap left only ${finalSet.length} valid choices out of the filtered list. Please loosen your generation/peak filter rules!`);
+            alert(`Critical Filter Error: Could only draw ${finalSet.length}/32 Glyphs while maintaining fairness and capping constraints. Please broaden filter options!`);
             return;
         }
 
-        // second shuffle to scatter capped owner across all four days
+        // Final shuffle to distribute owners evenly across MONDAY-THURSDAY
         for (let i = finalSet.length - 1; i > 0; i--) {
             const j = Math.floor(rng() * (i + 1));
             [finalSet[i], finalSet[j]] = [finalSet[j], finalSet[i]];
         }
 
-        console.log("[weekly-overview.php] executeRndDraw(): Assignment complete with owner limits enforced:", ownerCounts);
+        console.log("[weekly-overview.php] executeRndDraw(): Fair draw complete. Distribution per owner:", ownerCounts);
 
         // 3. Assign shuffled deck to groups
         const groups = {
@@ -1225,7 +1255,7 @@ function openEngineWithSeriesId(myPhase, myGroup) {
             'THURSDAY': finalSet.slice(24, 32)
         };
 
-        // 3a. Create a simplified package
+        // 3a. Save and render logic follows...
         const labels = ['A', 'B', 'C', 'D'];
         const groupSize = 8; 
         const simplifiedPackage = [];
@@ -1244,8 +1274,6 @@ function openEngineWithSeriesId(myPhase, myGroup) {
             });
         });
 
-        // 3b. Save package to database
-        console.log("Saving to database...");        
         const response = await fetch('php/save-draw.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1254,16 +1282,12 @@ function openEngineWithSeriesId(myPhase, myGroup) {
 
         const result = await response.json();
         if (result.status === 'success') {
-            console.log('Draw saved! Series ID: ' + result.series_id);
-
-            // 4. Now animate using the 'groups' object
             const dayKeys = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY'];
             const modal = document.getElementById('draw-modal');
             modal.style.display = 'block';
 
             for (const day of dayKeys) {
                 const col = document.getElementById(`col-${day}`); 
-                
                 for (const glyph of groups[day]) {
                     const clone = glyph.cloneNode(true);
                     clone.style.opacity = '0';
@@ -1279,101 +1303,9 @@ function openEngineWithSeriesId(myPhase, myGroup) {
             document.getElementById("first-draw-link").innerHTML = `<a href="https://lifehashes.net/hashwar-scheduler/weekly-overview.php?series_id=${result.series_id}" target="_blank">WEEKLY SERIES OVERVIEW</a>`;
 
             return groups;
-
         } else {
             console.error('Failed to save draw:', result.message);
         }
-    }
-
-    async function executeRndDrawOld() {
-        const status = document.getElementById('tva-status').innerText;
-        const rawSeed = parseInt(document.getElementById('coerced-seed-box').innerText);
-        const engineSeed = Math.abs(rawSeed);
-        const eligibleGlyphs = Array.from(document.querySelectorAll('.glyph-matrix-card:not(.offline)'));
-
-        if (status !== 'LOCKED' || eligibleGlyphs.length < 32) return;
-
-        // 1. Initialize seeded PRNG and shuffle
-        const rng = seededRandom(engineSeed);
-        for (let i = eligibleGlyphs.length - 1; i > 0; i--) {
-            const j = Math.floor(rng() * (i + 1));
-            [eligibleGlyphs[i], eligibleGlyphs[j]] = [eligibleGlyphs[j], eligibleGlyphs[i]];
-        }
-        // console.log("[weekly-overview.php] executeRndDraw(): Number of elligible Glyphs to draw from: " + eligibleGlyphs.length);
-
-        // 2. Assign shuffled deck to groups
-        const finalSet = eligibleGlyphs.slice(0, 32);
-        // console.log("[weekly-overview.php] executeRndDraw(): Final set of Glyphs: " + finalSet.length);
-        const groups = {
-            'MONDAY': finalSet.slice(0, 8),
-            'TUESDAY': finalSet.slice(8, 16),
-            'WEDNESDAY': finalSet.slice(16, 24),
-            'THURSDAY': finalSet.slice(24, 32)
-        };
-        console.log("[weekly-overview.php] executeRndDraw(): Assignment complete:", groups);
-
-        // 3a. Create a simplified package
-        const labels = ['A', 'B', 'C', 'D'];
-        const groupSize = 8; // Based on your logic of 32 glyphs / 4 groups
-        const simplifiedPackage = [];
-
-        labels.forEach((label, index) => {
-            const start = index * groupSize;
-            const end = start + groupSize;
-            const groupGlyphs = finalSet.slice(start, end);
-            
-            groupGlyphs.forEach(glyph => {
-                simplifiedPackage.push({
-                    name: glyph.querySelector('h3').innerText,
-                    group: label, // This will now be 'A', 'B', 'C', or 'D'
-                    phase: 1
-                });
-            });
-        });
-
-        // 3b. Save package to database
-        console.log("Saving to database...");        
-        const response = await fetch('php/save-draw.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ participants: simplifiedPackage })
-        });
-
-        const result = await response.json();
-        if (result.status === 'success') {
-            console.log('Draw saved! Series ID: ' + result.series_id);
-
-            // 4. Now animate using the 'groups' object
-            const dayKeys = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY'];
-            const modal = document.getElementById('draw-modal');
-            modal.style.display = 'block';
-
-            // Iterate through each day/column
-            for (const day of dayKeys) {
-                const col = document.getElementById(`col-${day}`); // Use the 'day' directly
-                
-                // Iterate through the 8 glyphs assigned to that specific day
-                for (const glyph of groups[day]) {
-                    const clone = glyph.cloneNode(true);
-                    clone.style.opacity = '0';
-                    col.appendChild(clone);
-                    
-                    await new Promise(r => setTimeout(r, 50));
-                    clone.style.transition = 'opacity 0.3s';
-                    clone.style.opacity = '1';
-                }
-            }
-
-            document.getElementById("first-draw-title").innerText = "SHUFFLE COMPLETE.";
-            document.getElementById("first-draw-link").innerHTML = `<a href="https://lifehashes.net/hashwar-scheduler/weekly-overview.php?series_id=${result.series_id}" target="_blank">WEEKLY SERIES OVERVIEW</a>`;
-
-            // console.log("[RND DRAW] Assignment complete:", groups);
-            return groups;
-
-        } else {
-            console.error('Failed to save draw:', result.message);
-        }
-
     }
     
     /**
