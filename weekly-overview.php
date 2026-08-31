@@ -17,6 +17,22 @@
         }
     }
 
+    /* Fetch Series Date Range from weekly_entries using designation */
+    $seriesDates = ['start' => 'dd.mm.yyyy', 'end' => 'dd.mm.yyyy'];
+    if ($series_id) {
+        try {
+            $dateStmt = $pdo->prepare("SELECT start_date, end_date FROM weekly_entries WHERE designation = ?");
+            $dateStmt->execute([(string)$series_id]);
+            $row = $dateStmt->fetch(PDO::FETCH_ASSOC);
+            if ($row) {
+                $seriesDates['start'] = date('d.m.Y', strtotime($row['start_date']));
+                $seriesDates['end']   = date('d.m.Y', strtotime($row['end_date']));
+            }
+        } catch (PDOException $e) {
+            // keep default placeholder
+        }
+    }
+
     /* First Draw (assigning 32 Glyphs to 4 groups) */
     if ($series_id){
         $query = $pdo->prepare("SELECT 
@@ -131,6 +147,70 @@
         // no parameter provided
     }
 
+    /* Fetch Participation Counts & Medals Tally */
+    $seriesCounts = [];
+    $medals = [];
+
+    try {
+        // 1. Participations count
+        $partStmt = $pdo->query("
+            SELECT sp.glyph_name, COUNT(DISTINCT sp.series_id) AS series_count 
+            FROM series_participants sp
+            WHERE sp.phase_id = '1'
+            GROUP BY sp.glyph_name
+        ");
+        while ($row = $partStmt->fetch(PDO::FETCH_ASSOC)) {
+            $seriesCounts[strtoupper($row['glyph_name'])] = (int)$row['series_count'];
+        }
+
+        // 2. Fetch Medals across all completed series
+        $seriesList = $pdo->query("SELECT designation FROM weekly_entries")->fetchAll(PDO::FETCH_COLUMN);
+
+        foreach ($seriesList as $desig) {
+            $finaleStmt = $pdo->prepare("
+                SELECT DISTINCT tournament_id 
+                FROM series_participants 
+                WHERE series_id = :series_desig AND (phase_id = '3' OR LOWER(group_label) = 'f')
+                LIMIT 1
+            ");
+            $finaleStmt->execute([':series_desig' => $desig]);
+            $tournamentId = $finaleStmt->fetchColumn();
+
+            if (!$tournamentId) continue;
+
+            $matchesStmt = $pdo->prepare("
+                SELECT m.match_designation, UPPER(m.p1_glyph_name) AS p1, UPPER(m.p2_glyph_name) AS p2,
+                    COALESCE(SUM(mr.p1_final_score), 0) AS total_p1, COALESCE(SUM(mr.p2_final_score), 0) AS total_p2
+                FROM matches m
+                LEFT JOIN match_rounds mr ON m.id = mr.match_id
+                WHERE m.tournament_id = :tournament_id
+                GROUP BY m.id, m.match_designation, m.p1_glyph_name, m.p2_glyph_name
+            ");
+            $matchesStmt->execute([':tournament_id' => $tournamentId]);
+            
+            foreach ($matchesStmt->fetchAll(PDO::FETCH_ASSOC) as $m) {
+                $p1 = $m['p1']; $p2 = $m['p2'];
+                if ($m['total_p1'] == $m['total_p2']) continue;
+                
+                $winner = $m['total_p1'] > $m['total_p2'] ? $p1 : $p2;
+                $loser  = $m['total_p1'] > $m['total_p2'] ? $p2 : $p1;
+
+                if (!isset($medals[$winner])) $medals[$winner] = ['gold' => 0, 'silver' => 0, 'bronze' => 0];
+                if (!isset($medals[$loser]))  $medals[$loser]  = ['gold' => 0, 'silver' => 0, 'bronze' => 0];
+
+                $desigTag = strtoupper($m['match_designation']);
+                if (strpos($desigTag, '1/1') !== false) {
+                    $medals[$winner]['gold']++;
+                    $medals[$loser]['silver']++;
+                } elseif (strpos($desigTag, '1/2') !== false || strpos($desigTag, '2/2') !== false) {
+                    $medals[$loser]['bronze']++;
+                }
+            }
+        }
+    } catch (PDOException $e) {
+        // Handle exception
+    }
+
 ?>
 
 <!DOCTYPE html>
@@ -149,6 +229,18 @@
         }
         a:link, a:visited {	color: var(--accent-green); }
 		a:hover { box-shadow: 0 0 20px var(--accent-green); }
+
+        /* Medal Badges */
+        .glyph-badges { display: inline-flex; align-items: center; gap: 4px; }
+        .medal-badge { display: inline-flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: bold; padding: 1px 5px; border-radius: 3px; font-family: monospace; line-height: 1; }
+        .medal-gold { color: #ffd700; background: rgba(255, 215, 0, 0.15); border: 1px solid rgba(255, 215, 0, 0.5); box-shadow: 0 0 5px rgba(255, 215, 0, 0.3); }
+        .medal-silver { color: #c0c0c0; background: rgba(192, 192, 192, 0.15); border: 1px solid rgba(192, 192, 192, 0.5); box-shadow: 0 0 5px rgba(192, 192, 192, 0.2); }
+        .medal-bronze { color: #cd7f32; background: rgba(205, 127, 50, 0.15); border: 1px solid rgba(205, 127, 50, 0.5); box-shadow: 0 0 5px rgba(205, 127, 50, 0.2); }
+
+        /* Chevrons */
+        .pip-rookie-label { font-size: 0.6rem; font-family: monospace; color: #888; border: 1px dashed #555; padding: 0 3px; border-radius: 2px; }
+        .chevrons-wrapper { display: inline-flex; align-items: center; vertical-align: middle; margin-left: 4px; gap: 1px; }
+    
     </style>
 </head>
 <body>
@@ -333,8 +425,44 @@
 
                                         <div style="display: flex; gap: 10px;">
                                             <div style="flex: 1;">
-                                                <div class="glyph-identity">
-                                                    <h3><?php echo htmlspecialchars($glyph['glyph_name']); ?></h3>
+                                                <?php 
+                                                    $glyphKey = strtoupper($glyph['glyph_name']);
+                                                    $gMedals  = $medals[$glyphKey] ?? ['gold' => 0, 'silver' => 0, 'bronze' => 0];
+                                                    $pCount   = $seriesCounts[$glyphKey] ?? 0;
+                                                ?>
+
+                                                <div class="glyph-identity" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                                    <h3 style="margin: 0; display: inline-block;"><?php echo htmlspecialchars($glyph['glyph_name']); ?></h3>
+
+                                                    <!-- Medals & Participation Chevrons -->
+                                                    <div class="glyph-badges" style="display: inline-flex; align-items: center; gap: 4px;">
+                                                        <?php if ($gMedals['gold'] > 0): ?>
+                                                            <span class="medal-badge medal-gold" title="<?php echo $gMedals['gold']; ?> Gold">★ <?php echo $gMedals['gold']; ?></span>
+                                                        <?php endif; ?>
+                                                        <?php if ($gMedals['silver'] > 0): ?>
+                                                            <span class="medal-badge medal-silver" title="<?php echo $gMedals['silver']; ?> Silver">★ <?php echo $gMedals['silver']; ?></span>
+                                                        <?php endif; ?>
+                                                        <?php if ($gMedals['bronze'] > 0): ?>
+                                                            <span class="medal-badge medal-bronze" title="<?php echo $gMedals['bronze']; ?> Bronze">★ <?php echo $gMedals['bronze']; ?></span>
+                                                        <?php endif; ?>
+
+                                                        <div class="chevrons-wrapper">
+                                                            <?php 
+                                                            if ($pCount > 0) {
+                                                                $golds = floor($pCount / 5);
+                                                                $greens = $pCount % 5;
+                                                                for ($i = 0; $i < $golds; $i++) {
+                                                                    echo '<svg width="7" height="10" viewBox="0 0 7 10" style="filter: drop-shadow(0 0 3px #f4d042); margin-right: 1px;"><polyline points="1,1 6,5 1,9" fill="none" stroke="#f4d042" stroke-width="2.2" stroke-linecap="round"/></svg>';
+                                                                }
+                                                                for ($i = 0; $i < $greens; $i++) {
+                                                                    echo '<svg width="6" height="10" viewBox="0 0 6 10" style="filter: drop-shadow(0 0 2px var(--accent-green));"><polyline points="1,1 5,5 1,9" fill="none" stroke="var(--accent-green)" stroke-width="1.6" stroke-linecap="round"/></svg>';
+                                                                }
+                                                            } else {
+                                                                echo '<span class="pip-rookie-label">NEW</span>';
+                                                            }
+                                                            ?>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                                 <div class="glyph-info-compact">
                                                     <div>Owner: <?php echo htmlspecialchars($glyph['OWNER'] ?? 'SYSTEM'); ?></div>
@@ -477,8 +605,44 @@
 
                                         <div style="display: flex; gap: 10px;">
                                             <div style="flex: 1;">
-                                                <div class="glyph-identity">
-                                                    <h3><?php echo htmlspecialchars($glyph['glyph_name']); ?></h3>
+                                                <?php 
+                                                    $glyphKey = strtoupper($glyph['glyph_name']);
+                                                    $gMedals  = $medals[$glyphKey] ?? ['gold' => 0, 'silver' => 0, 'bronze' => 0];
+                                                    $pCount   = $seriesCounts[$glyphKey] ?? 0;
+                                                ?>
+
+                                                <div class="glyph-identity" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                                    <h3 style="margin: 0; display: inline-block;"><?php echo htmlspecialchars($glyph['glyph_name']); ?></h3>
+
+                                                    <!-- Medals & Participation Chevrons -->
+                                                    <div class="glyph-badges" style="display: inline-flex; align-items: center; gap: 4px;">
+                                                        <?php if ($gMedals['gold'] > 0): ?>
+                                                            <span class="medal-badge medal-gold" title="<?php echo $gMedals['gold']; ?> Gold">★ <?php echo $gMedals['gold']; ?></span>
+                                                        <?php endif; ?>
+                                                        <?php if ($gMedals['silver'] > 0): ?>
+                                                            <span class="medal-badge medal-silver" title="<?php echo $gMedals['silver']; ?> Silver">★ <?php echo $gMedals['silver']; ?></span>
+                                                        <?php endif; ?>
+                                                        <?php if ($gMedals['bronze'] > 0): ?>
+                                                            <span class="medal-badge medal-bronze" title="<?php echo $gMedals['bronze']; ?> Bronze">★ <?php echo $gMedals['bronze']; ?></span>
+                                                        <?php endif; ?>
+
+                                                        <div class="chevrons-wrapper">
+                                                            <?php 
+                                                            if ($pCount > 0) {
+                                                                $golds = floor($pCount / 5);
+                                                                $greens = $pCount % 5;
+                                                                for ($i = 0; $i < $golds; $i++) {
+                                                                    echo '<svg width="7" height="10" viewBox="0 0 7 10" style="filter: drop-shadow(0 0 3px #f4d042); margin-right: 1px;"><polyline points="1,1 6,5 1,9" fill="none" stroke="#f4d042" stroke-width="2.2" stroke-linecap="round"/></svg>';
+                                                                }
+                                                                for ($i = 0; $i < $greens; $i++) {
+                                                                    echo '<svg width="6" height="10" viewBox="0 0 6 10" style="filter: drop-shadow(0 0 2px var(--accent-green));"><polyline points="1,1 5,5 1,9" fill="none" stroke="var(--accent-green)" stroke-width="1.6" stroke-linecap="round"/></svg>';
+                                                                }
+                                                            } else {
+                                                                echo '<span class="pip-rookie-label">NEW</span>';
+                                                            }
+                                                            ?>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                                 <div class="glyph-info-compact">
                                                     <div>Owner: <?php echo htmlspecialchars($glyph['OWNER'] ?? 'SYSTEM'); ?></div>
@@ -634,12 +798,6 @@
                 finalDraw = <?php echo json_encode($finalDraw); ?>;
                 phase3 = <?php echo json_encode($phase3); ?>;
 
-                console.table(firstDraw);
-                console.table(phase1);
-                console.table(phase2);
-                console.table(finalDraw);
-                console.table(phase3);
-
                 // indicate weekly series id in the page title
                 document.getElementById("weekNumber").innerText = s;
 
@@ -648,9 +806,10 @@
                 if (phase2.length > 0){ populatePhase(2); }
                 if (phase3.length > 0){ populatePhase(3); }
 
-                let w = getWeekRange(s);
-                document.getElementById("week-start").innerText = w.start;
-                document.getElementById("week-end").innerText = w.end;
+                // Retrieve dates directly from PHP database query
+                let seriesDates = <?php echo json_encode($seriesDates); ?>;
+                document.getElementById("week-start").innerText = seriesDates.start;
+                document.getElementById("week-end").innerText = seriesDates.end;
 
             }
 

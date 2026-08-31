@@ -8,34 +8,87 @@ if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
     exit;
 }
-    */
+*/
 
 $current_operator = htmlspecialchars($_SESSION['username'] ?? 'UNKNOWN');
+
+// ---------------------------------------------------------
+// Handle Weight Class Filtering (GET param)
+// ---------------------------------------------------------
+$allowedWeightClasses = ['ALL', '500', '600', '700', '800'];
+$selectedWeightClass = $_GET['weight_class'] ?? 'ALL';
+
+if (!in_array($selectedWeightClass, $allowedWeightClasses)) {
+    $selectedWeightClass = 'ALL';
+}
 
 // Holding structures
 $seriesCounts    = [];
 $medals          = []; // Global medals tally for Hall of Fame
-$seriesPodiums   = []; // Per-series medals: [ series_id => ['gold' => X, 'silver' => Y, 'bronze' => [Z1, Z2]] ]
+$seriesPodiums   = []; // Per-series medals: [ designation => ['gold' => X, 'silver' => Y, 'bronze' => [Z1, Z2]] ]
 $seriesList      = [];
 $decoratedGlyphs = [];
 
 try {
-    // 1. Fetch participation counts per glyph across all weekly series
-    $participationsStmt = $pdo->query("
-        SELECT glyph_name, COUNT(DISTINCT series_id) AS series_count 
-        FROM series_participants 
-        WHERE phase_id = '1'
-        GROUP BY glyph_name
-    ");
+    // ---------------------------------------------------------
+    // Fetch Series with correct `weight_class` mapped by `designation`
+    // ---------------------------------------------------------
+    $seriesStmt = $pdo->query("SELECT id, designation, weight_class, start_date FROM weekly_entries ORDER BY designation DESC");
+    $rawSeriesList = $seriesStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // ---------------------------------------------------------
+    // Limit Future Series: Retain all past/current series + at most 1 future series
+    // ---------------------------------------------------------
+    $today = date('Y-m-d H:i:s');
+    $pastOrCurrent = [];
+    $futureSeries  = [];
+
+    foreach ($rawSeriesList as $s) {
+        if (isset($s['start_date']) && $s['start_date'] > $today) {
+            $futureSeries[] = $s;
+        } else {
+            $pastOrCurrent[] = $s;
+        }
+    }
+
+    // Sort future series chronologically to pick the immediate next one
+    usort($futureSeries, function($a, $b) {
+        return strtotime($a['start_date']) <=> strtotime($b['start_date']);
+    });
+
+    // Keep only 1 upcoming future series (if any exist)
+    $nextFutureSeries = array_slice($futureSeries, 0, 1);
+
+    // Merge: single future series at top, followed by past/current series (descending)
+    $seriesList = array_merge($nextFutureSeries, $pastOrCurrent);
+
+    // Map series weight classes by `designation` instead of `id`
+    $seriesWeightClasses = [];
+    foreach ($seriesList as $s) {
+        $seriesWeightClasses[$s['designation']] = (int)($s['weight_class'] ?? 500);
+    }
+
+    // 1. Fetch participation counts per glyph matching via `designation`
+    $participationsSql = "
+        SELECT sp.glyph_name, COUNT(DISTINCT sp.series_id) AS series_count 
+        FROM series_participants sp
+        INNER JOIN weekly_entries we ON sp.series_id = we.designation
+        WHERE sp.phase_id = '1'
+    ";
+    $participationsParams = [];
+    if ($selectedWeightClass !== 'ALL') {
+        $participationsSql .= " AND we.weight_class = :wc";
+        $participationsParams[':wc'] = $selectedWeightClass;
+    }
+    $participationsSql .= " GROUP BY sp.glyph_name";
+
+    $participationsStmt = $pdo->prepare($participationsSql);
+    $participationsStmt->execute($participationsParams);
     $participationsRaw = $participationsStmt->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($participationsRaw as $row) {
         $seriesCounts[strtoupper($row['glyph_name'])] = (int)$row['series_count'];
     }
-
-    // 2. Fetch all series records
-    $seriesStmt = $pdo->query("SELECT id, designation, type, start_date FROM series ORDER BY id DESC");
-    $seriesList = $seriesStmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Helper function to initialize medals structure for a glyph
     $initGlyphMedal = function($name) use (&$medals) {
@@ -46,18 +99,19 @@ try {
 
     // 3. Process Podium Winners for each Series
     foreach ($seriesList as $s) {
-        $sId = $s['id'];
-        $seriesPodiums[$sId] = ['gold' => null, 'silver' => null, 'bronze' => []];
+        $designation  = $s['designation'];
+        $seriesWeight = $seriesWeightClasses[$designation] ?? 500;
+        $seriesPodiums[$designation] = ['gold' => null, 'silver' => null, 'bronze' => []];
 
-        // Locate the unique finale tournament_id for this series (Phase 3 / Group F)
+        // Locate the unique finale tournament_id using `designation`
         $finaleStmt = $pdo->prepare("
             SELECT DISTINCT tournament_id 
             FROM series_participants 
-            WHERE series_id = :series_id 
+            WHERE series_id = :series_desig 
               AND (phase_id = '3' OR LOWER(group_label) = 'f')
             LIMIT 1
         ");
-        $finaleStmt->execute([':series_id' => $sId]);
+        $finaleStmt->execute([':series_desig' => $designation]);
         $tournamentId = $finaleStmt->fetchColumn();
 
         if (!$tournamentId) {
@@ -95,23 +149,26 @@ try {
                 continue; // Skip ties
             }
 
-            $initGlyphMedal($winner);
-            $initGlyphMedal($loser);
+            // Always track podium for left-side series cards by designation
+            if (strpos(strtoupper($m['match_designation']), '1/1') !== false) {
+                $seriesPodiums[$designation]['gold']   = $winner;
+                $seriesPodiums[$designation]['silver'] = $loser;
+            } elseif (strpos(strtoupper($m['match_designation']), '1/2') !== false || strpos(strtoupper($m['match_designation']), '2/2') !== false) {
+                $seriesPodiums[$designation]['bronze'][] = $loser;
+            }
 
-            $designation = strtoupper($m['match_designation']);
+            // Only aggregate to global medals list if series matches selected weight class filter
+            if ($selectedWeightClass === 'ALL' || (string)$seriesWeight === (string)$selectedWeightClass) {
+                $initGlyphMedal($winner);
+                $initGlyphMedal($loser);
 
-            // FINALE: Match 1/1 -> Gold & Silver
-            if (strpos($designation, '1/1') !== false) {
-                $medals[$winner]['gold']++;
-                $medals[$loser]['silver']++;
-
-                $seriesPodiums[$sId]['gold']   = $winner;
-                $seriesPodiums[$sId]['silver'] = $loser;
-            } 
-            // SEMI-FINALS: Match 1/2 or Match 2/2 -> Loser gets Bronze
-            elseif (strpos($designation, '1/2') !== false || strpos($designation, '2/2') !== false) {
-                $medals[$loser]['bronze']++;
-                $seriesPodiums[$sId]['bronze'][] = $loser;
+                $matchDesig = strtoupper($m['match_designation']);
+                if (strpos($matchDesig, '1/1') !== false) {
+                    $medals[$winner]['gold']++;
+                    $medals[$loser]['silver']++;
+                } elseif (strpos($matchDesig, '1/2') !== false || strpos($matchDesig, '2/2') !== false) {
+                    $medals[$loser]['bronze']++;
+                }
             }
         }
     }
@@ -181,6 +238,11 @@ try {
         $bronze = $medals[$upperName]['bronze'] ?? 0;
         $series = $seriesCounts[$upperName]   ?? 0;
 
+        // Skip owners with zero relevant activity for the filtered view
+        if ($selectedWeightClass !== 'ALL' && ($gold + $silver + $bronze + $series === 0)) {
+            continue;
+        }
+
         if (!isset($ownerStats[$owner])) {
             $ownerStats[$owner] = [
                 'username' => $owner,
@@ -249,6 +311,19 @@ try {
         .podium-item.silver { color: #c0c0c0; } 
         .podium-item.bronze { color: #cd7f32; }
 
+        /* Schedule Action Link Banner */
+        .schedule-link-banner {
+            display: flex; align-items: center; justify-content: space-between;
+            background: rgba(0, 255, 65, 0.05); border: 1px solid rgba(0, 255, 65, 0.3);
+            padding: 8px 12px; margin-bottom: 15px; border-radius: 4px;
+            font-family: monospace; font-size: 0.75rem; color: var(--accent-green);
+            text-decoration: none; transition: all 0.2s ease;
+        }
+        .schedule-link-banner:hover {
+            background: rgba(0, 255, 65, 0.15); border-color: var(--accent-green);
+            box-shadow: 0 0 10px rgba(0, 255, 65, 0.25); transform: translateX(2px);
+        }
+
         /* Hall of Fame Badges (Right Column) */
         .rank-badge { font-family: monospace; font-size: 0.85rem; font-weight: bold; color: var(--accent-green); background: rgba(0, 255, 65, 0.1); border: 1px solid rgba(0, 255, 65, 0.3); padding: 2px 6px; border-radius: 3px; margin-right: 6px; }
         .top-1 { color: #ffd700; border-color: #ffd700; background: rgba(255, 215, 0, 0.15); }
@@ -298,6 +373,16 @@ try {
             font-weight: bold;
             letter-spacing: 1px;
             box-shadow: 0 0 6px var(--accent-green);
+        }
+
+        .status-badge-future {
+            font-size: 0.55rem;
+            font-family: monospace;
+            color: #ffaa00;
+            border: 1px solid rgba(255, 170, 0, 0.4);
+            background: rgba(255, 170, 0, 0.1);
+            padding: 0px 4px;
+            border-radius: 2px;
         }
 
         .status-badge-closed {
@@ -354,6 +439,33 @@ try {
             gap: 20px;
         }
 
+        /* Weight Class Selector Toolbar Dropdown */
+        .weight-class-selector-box {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(10, 15, 12, 0.7);
+            border: 1px solid rgba(0, 255, 65, 0.25);
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin-bottom: 5px;
+        }
+        .weight-class-select {
+            background: #000;
+            color: var(--accent-green);
+            border: 1px solid rgba(0, 255, 65, 0.4);
+            font-family: monospace;
+            font-size: 0.8rem;
+            padding: 4px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            outline: none;
+        }
+        .weight-class-select:focus {
+            border-color: var(--accent-green);
+            box-shadow: 0 0 6px rgba(0, 255, 65, 0.4);
+        }
+
         /* Individual split card container */
         .right-split-box {
             display: flex;
@@ -404,7 +516,7 @@ try {
         /* --- Global Entropy-Style Scrollbars --- */
         ::-webkit-scrollbar {
             width: 8px;
-            height: 8px; /* Added for horizontal scrollbars if needed */
+            height: 8px;
         }
 
         ::-webkit-scrollbar-track {
@@ -438,29 +550,39 @@ try {
         <div class="hub-grid">
             <!-- LEFT HALF: DYNAMIC SERIES CONTROL SURFACES -->
             <div class="hub-left-column">
-                <div class="panel-title" style="margin-bottom:15px;">WEEKLY SERIES // SELECT TOURNAMENT</div>
+                <div class="panel-title" style="margin-bottom:8px;">WEEKLY SERIES // SELECT TOURNAMENT</div>
+                
+                <!-- Yearly Series Schedule Link -->
+                <a href="https://lifehashes.net/hashwar-scheduler/yearly-overview.php" class="schedule-link-banner">
+                    <span>VIEW YEARLY SERIES SCHEDULE</span>
+                    <span>OPEN &gt;</span>
+                </a>
+
                 <div class="large-content-box" style="min-height: 300px;">
                     <?php if (empty($seriesList)): ?>
                         <p style="color: #eee; font-family: monospace;">No active or past weekly series found.</p>
                     <?php else: ?>
                         <?php foreach ($seriesList as $index => $s): 
-                            $sId = $s['id'];
-                            $podium = $seriesPodiums[$sId] ?? ['gold' => null, 'silver' => null, 'bronze' => []];
-                            $weightClass = 500;
+                            $designation = $s['designation'];
+                            $podium = $seriesPodiums[$designation] ?? ['gold' => null, 'silver' => null, 'bronze' => []];
+                            $weightClass = $s['weight_class'] ?? 500;
                             $bronzeDisplay = !empty($podium['bronze']) ? implode(', ', $podium['bronze']) : 'TBD';
 
-                            // Highlight the latest series as ACTIVE (index 0 assuming DESC sort)
-                            $isCurrent = ($index === 0); 
+                            $isFuture  = isset($s['start_date']) && $s['start_date'] > date('Y-m-d H:i:s');
+                            $isCurrent = (!$isFuture && $index === 0) || (!$isFuture && isset($seriesList[0]['start_date']) && $seriesList[0]['start_date'] > date('Y-m-d H:i:s') && $index === 1);
+                            
                             $cardClass = $isCurrent ? 'series-control-surface active-series' : 'series-control-surface';
                         ?>
-                            <a href="weekly-overview.php?series_id=<?php echo urlencode($sId); ?>" class="<?php echo $cardClass; ?>">
+                            <a href="weekly-overview.php?series_id=<?php echo urlencode($designation); ?>" class="<?php echo $cardClass; ?>">
                                 <div style="display: flex; align-items: center; gap: 15px;">
-                                    <div class="series-id-badge">[ <?php echo sprintf('%02d', $sId); ?> ]</div>
+                                    <div class="series-id-badge">[ <?php echo sprintf('%02d', $designation); ?> ]</div>
                                     
                                     <div class="series-meta">
                                         <div class="weight-class-tag" style="display: flex; align-items: center; gap: 8px;">
-                                            <span>WEIGHT CLASS: <?php echo $weightClass; ?></span>
-                                            <?php if ($isCurrent): ?>
+                                            <span>WEIGHT CLASS: <?php echo htmlspecialchars($weightClass); ?></span>
+                                            <?php if ($isFuture): ?>
+                                                <span class="status-badge-future">UPCOMING</span>
+                                            <?php elseif ($isCurrent): ?>
                                                 <span class="status-badge-live">ONGOING</span>
                                             <?php else: ?>
                                                 <span class="status-badge-closed">ARCHIVE</span>
@@ -492,13 +614,29 @@ try {
             <!-- RIGHT HALF: VERTICAL SPLIT (GLYPH HOF TOP // OWNER LEADERBOARD BOTTOM) -->
             <div class="hub-right-column">
 
+                <!-- WEIGHT CLASS SELECTOR TOOLBAR -->
+                <div class="weight-class-selector-box">
+                    <span style="font-family: monospace; font-size: 0.75rem; color: var(--accent-green); font-weight: bold; letter-spacing: 1px;">
+                        FILTER WEIGHT CLASS:
+                    </span>
+                    <form method="GET" action="" style="margin:0;">
+                        <select name="weight_class" class="weight-class-select" onchange="this.form.submit()">
+                            <option value="ALL" <?php echo $selectedWeightClass === 'ALL' ? 'selected' : ''; ?>>ALL CLASSES</option>
+                            <option value="500" <?php echo $selectedWeightClass === '500' ? 'selected' : ''; ?>>500</option>
+                            <option value="600" <?php echo $selectedWeightClass === '600' ? 'selected' : ''; ?>>600</option>
+                            <option value="700" <?php echo $selectedWeightClass === '700' ? 'selected' : ''; ?>>700</option>
+                            <option value="800" <?php echo $selectedWeightClass === '800' ? 'selected' : ''; ?>>800</option>
+                        </select>
+                    </form>
+                </div>
+
                 <!-- TOP SECTION: INDIVIDUAL GLYPH HALL OF FAME -->
                 <div class="right-split-box">
                     <div class="panel-title" style="margin-bottom:10px;">HALL_OF_FAME // GLYPH STANDINGS (<?php echo count($decoratedGlyphs); ?>)</div>
 
                     <div class="split-scroll-area">
                         <?php if (empty($decoratedGlyphs)): ?>
-                            <p style="color: #eee; font-family: monospace;">No decorated Glyphs found in database.</p>
+                            <p style="color: #eee; font-family: monospace;">No decorated Glyphs found for this weight class.</p>
                         <?php else: ?>
                             <?php foreach ($decoratedGlyphs as $index => $glyph): 
                                 $rank = $index + 1;
@@ -560,7 +698,7 @@ try {
 
                     <div class="split-scroll-area">
                         <?php if (empty($ownerStats)): ?>
-                            <p style="color: #eee; font-family: monospace;">No active owners found.</p>
+                            <p style="color: #eee; font-family: monospace;">No active owners found for this weight class.</p>
                         <?php else: ?>
                             <?php foreach ($ownerStats as $oIndex => $owner): 
                                 $oRank = $oIndex + 1;
