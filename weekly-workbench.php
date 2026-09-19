@@ -29,7 +29,7 @@ $current_operator = htmlspecialchars($_SESSION['username']);
 $operator_id      = htmlspecialchars($_SESSION['user_id']);
 
 // Fetch all available Conway Glyphs
-$stmt = $pdo->query("SELECT BATTLE_NAME, ITERATIONS as GENERATIONS, PEAK, MAX, OWNER, BIN, HASH FROM GLYPHREG WHERE GRID_SIZE='16' ORDER BY BATTLE_NAME ASC");
+$stmt = $pdo->query("SELECT BATTLE_NAME, ITERATIONS as GENERATIONS, PEAK, MAX, OWNER, BIN, HASH FROM GLYPHREG WHERE GRID_SIZE='16' AND HASHWAR='1' ORDER BY BATTLE_NAME ASC");
 $glyphs = $stmt->fetchAll();
 
 // Top 3 Glyphs from Phase I
