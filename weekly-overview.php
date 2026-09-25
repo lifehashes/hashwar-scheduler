@@ -1,19 +1,20 @@
 <?php
+    // Enable error reporting to surface issue details directly if further warnings occur
+    ini_set('display_errors', 1);
+    ini_set('display_startup_errors', 1);
+    error_reporting(E_ALL);
 
     include_once __DIR__ . '/../../priv/db_conf_laniakea.php';
 
-    // $series_id = isset($_GET['series_id']) && is_numeric($_GET['series_id']) ? (int)$_GET['series_id'] : null;
     // 1. Check if series_id was passed via URL parameter
     if (isset($_GET['series_id']) && is_numeric($_GET['series_id'])) {
         $series_id = (int)$_GET['series_id'];
     } else {
         // 2. Fallback: Automatically query the database for the maximum (latest) series_id
         try {
-            $latestStmt = $pdo->query("SELECT MAX(series_id) AS latest FROM series_participants");
-            $result = $latestStmt->fetch(PDO::FETCH_ASSOC);
-            $series_id = $result['latest'] ? (int)$result['latest'] : null;
-        } catch (PDOException $e) {
-            $series_id = null;
+            $latestStmt =$pdo->query("SELECT MAX(series_id) AS latest FROM series_participants");
+            $result = $latestStmt->fetch(PDO::FETCH_ASSOC);$series_id = $result['latest'] ? (int)$result['latest'] : null;
+        } catch (PDOException $e) {$series_id = null;
         }
     }
 
@@ -21,9 +22,9 @@
     $seriesDates = ['start' => 'dd.mm.yyyy', 'end' => 'dd.mm.yyyy'];
     if ($series_id) {
         try {
-            $dateStmt = $pdo->prepare("SELECT start_date, end_date FROM weekly_entries WHERE designation = ?");
+            $dateStmt =$pdo->prepare("SELECT start_date, end_date FROM weekly_entries WHERE designation = ?");
             $dateStmt->execute([(string)$series_id]);
-            $row = $dateStmt->fetch(PDO::FETCH_ASSOC);
+            $row =$dateStmt->fetch(PDO::FETCH_ASSOC);
             if ($row) {
                 $seriesDates['start'] = date('d.m.Y', strtotime($row['start_date']));
                 $seriesDates['end']   = date('d.m.Y', strtotime($row['end_date']));
@@ -34,57 +35,62 @@
     }
 
     /* First Draw (assigning 32 Glyphs to 4 groups) */
+    $firstDraw = [];
     if ($series_id){
-        $query = $pdo->prepare("SELECT 
-            sp.glyph_name, 
-            sp.group_label,
-            g.ITERATIONS, 
-            g.PEAK, 
-            g.BIN, 
-            g.HASH,
-            g.OWNER
-        FROM `series_participants` sp
-        INNER JOIN `GLYPHREG` g ON sp.glyph_name = g.BATTLE_NAME
-        WHERE sp.series_id = ? AND sp.phase_id = '1'
-        ORDER BY sp.id;");
-        $query->execute([$series_id]);
-        $firstDraw = $query->fetchAll(PDO::FETCH_ASSOC);
-    } else {
-        $firstDraw = [];
+        try {
+            $query =$pdo->prepare("SELECT 
+                sp.glyph_name, 
+                sp.group_label,
+                g.ITERATIONS, 
+                g.PEAK, 
+                g.BIN, 
+                g.HASH,
+                g.OWNER
+            FROM `series_participants` sp
+            INNER JOIN `GLYPHREG` g ON sp.glyph_name = g.BATTLE_NAME
+            WHERE sp.series_id = ? AND sp.phase_id = '1'
+            ORDER BY sp.id;");
+            $query->execute([$series_id]);
+            $firstDraw =$query->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {$firstDraw = [];
+        }
     }
 
     /* Phase 1 (Group Phase) */
+    $phase1 = [];
     if ($series_id){
-        $query = $pdo->prepare("SELECT 
-            sp.glyph_name, sp.group_label, 
-            SUM(
-                CASE 
-                    WHEN m.p1_glyph_name = sp.glyph_name THEN mr.p1_final_score 
-                    WHEN m.p2_glyph_name = sp.glyph_name THEN mr.p2_final_score 
-                    ELSE 0 
-                END
-            ) AS total_score
-        FROM series_participants sp
-        JOIN matches m ON sp.tournament_id = m.tournament_id 
-            AND (sp.glyph_name = m.p1_glyph_name OR sp.glyph_name = m.p2_glyph_name)
-        JOIN match_rounds mr ON m.id = mr.match_id
-        WHERE sp.series_id = ? AND sp.phase_id='1'
-        GROUP BY sp.glyph_name
-        ORDER BY sp.group_label, total_score DESC;");
-        $query->execute([$series_id]);
-        $phase1 = $query->fetchAll(PDO::FETCH_ASSOC);
-    } else {
-        // no parameter provided
+        try {
+            $query = $pdo->prepare("SELECT 
+                sp.glyph_name, sp.group_label, sp.MODE, sp.tournament_id,
+                SUM(
+                    CASE 
+                        WHEN m.p1_glyph_name = sp.glyph_name THEN mr.p1_final_score 
+                        WHEN m.p2_glyph_name = sp.glyph_name THEN mr.p2_final_score 
+                        ELSE 0 
+                    END
+                ) AS total_score
+            FROM series_participants sp
+            JOIN matches m ON sp.tournament_id = m.tournament_id 
+                AND (sp.glyph_name = m.p1_glyph_name OR sp.glyph_name = m.p2_glyph_name)
+            JOIN match_rounds mr ON m.id = mr.match_id
+            WHERE sp.series_id = ? AND sp.phase_id='1'
+            GROUP BY sp.glyph_name, sp.group_label, sp.MODE, sp.tournament_id
+            ORDER BY sp.group_label ASC, total_score DESC;");
+            $query->execute([$series_id]);
+            $phase1 = $query->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {$phase1 = [];
+        }
     }
 
     /* Common data retrieval function for phase 2 and 3 */
-    function getTournamentMatches($pdo, $seriesId, $phaseId) {
-        $sql = "SELECT 
+    function getTournamentMatches($pdo,$seriesId, $phaseId) {$sql = "SELECT 
                     m.tournament_id, 
                     m.id AS match_id,
                     sp.group_label,
                     m.p1_glyph_name, 
                     m.p2_glyph_name,
+                    sp1.MODE AS p1_mode,
+                    sp2.MODE AS p2_mode,
                     CASE WHEN mr.total_p1 > mr.total_p2 THEN 1 ELSE 0 END AS p1_win,
                     CASE WHEN mr.total_p2 > mr.total_p1 THEN 1 ELSE 0 END AS p2_win,
                     mr.total_p1,
@@ -95,6 +101,12 @@
                     FROM `series_participants` 
                     WHERE series_id = :series_id AND phase_id = :phase_id
                 ) sp ON m.tournament_id = sp.tournament_id
+                LEFT JOIN `series_participants` sp1 ON sp1.series_id = :series_id 
+                    AND sp1.phase_id = :phase_id 
+                    AND sp1.glyph_name = m.p1_glyph_name
+                LEFT JOIN `series_participants` sp2 ON sp2.series_id = :series_id 
+                    AND sp2.phase_id = :phase_id 
+                    AND sp2.glyph_name = m.p2_glyph_name
                 LEFT JOIN (
                     SELECT 
                         match_id, 
@@ -105,8 +117,7 @@
                 ) mr ON m.id = mr.match_id
                 ORDER BY sp.group_label ASC, m.id ASC";
 
-        $query = $pdo->prepare($sql);
-        $query->execute([
+        $query =$pdo->prepare($sql);$query->execute([
             'series_id' => $seriesId,
             'phase_id'  => $phaseId
         ]);
@@ -115,70 +126,74 @@
     }
 
     /* Phase 2 (Redemption Day) */
+    $phase2 = [];
     if ($series_id){
-        $phase2 = getTournamentMatches($pdo, $series_id, '2');
-    } else {
-        // no parameter provided
+        try {
+            $phase2 = getTournamentMatches($pdo,$series_id, '2');
+        } catch (PDOException $e) {$phase2 = [];
+        }
     }
 
     /* Final Draw (assigning the 16 contestants randomly to match brackets) */
+    $finalDraw = [];
     if ($series_id){
-         $query = $pdo->prepare("SELECT 
-            sp.glyph_name, 
-            g.ITERATIONS, 
-            g.PEAK, 
-            g.BIN, 
-            g.HASH,
-            g.OWNER
-        FROM `series_participants` sp
-        INNER JOIN `GLYPHREG` g ON sp.glyph_name = g.BATTLE_NAME
-        WHERE sp.series_id = ? AND sp.phase_id = '3'
-        ORDER BY sp.id;");
-         $query->execute([$series_id]);
-         $finalDraw = $query->fetchAll(PDO::FETCH_ASSOC);
-    } else {
-        // no parameter provided
+        try {
+            $query =$pdo->prepare("SELECT 
+                sp.glyph_name, 
+                g.ITERATIONS, 
+                g.PEAK, 
+                g.BIN, 
+                g.HASH,
+                g.OWNER
+            FROM `series_participants` sp
+            INNER JOIN `GLYPHREG` g ON sp.glyph_name = g.BATTLE_NAME
+            WHERE sp.series_id = ? AND sp.phase_id = '3'
+            ORDER BY sp.id;");
+            $query->execute([$series_id]);
+            $finalDraw =$query->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {$finalDraw = [];
+        }
     }
 
     /* Phase 3 (Final Tournament) */
+    $phase3 = [];
     if ($series_id){
-        $phase3 = getTournamentMatches($pdo, $series_id, '3');
-    } else {
-        // no parameter provided
+        try {
+            $phase3 = getTournamentMatches($pdo,$series_id, '3');
+        } catch (PDOException $e) {$phase3 = [];
+        }
     }
 
     /* Fetch Participation Counts & Medals Tally */
-    $seriesCounts = [];
-    $medals = [];
+    $seriesCounts = [];$medals = [];
 
     try {
         // 1. Participations count
-        $partStmt = $pdo->query("
+        $partStmt =$pdo->query("
             SELECT sp.glyph_name, COUNT(DISTINCT sp.series_id) AS series_count 
             FROM series_participants sp
             WHERE sp.phase_id = '1'
             GROUP BY sp.glyph_name
         ");
-        while ($row = $partStmt->fetch(PDO::FETCH_ASSOC)) {
-            $seriesCounts[strtoupper($row['glyph_name'])] = (int)$row['series_count'];
+        while ($row = $partStmt->fetch(PDO::FETCH_ASSOC)) {$seriesCounts[strtoupper($row['glyph_name'])] = (int)$row['series_count'];
         }
 
         // 2. Fetch Medals across all completed series
-        $seriesList = $pdo->query("SELECT designation FROM weekly_entries")->fetchAll(PDO::FETCH_COLUMN);
+        $seriesList =$pdo->query("SELECT designation FROM weekly_entries")->fetchAll(PDO::FETCH_COLUMN);
 
-        foreach ($seriesList as $desig) {
-            $finaleStmt = $pdo->prepare("
+        foreach ($seriesList as$desig) {
+            $finaleStmt =$pdo->prepare("
                 SELECT DISTINCT tournament_id 
                 FROM series_participants 
                 WHERE series_id = :series_desig AND (phase_id = '3' OR LOWER(group_label) = 'f')
                 LIMIT 1
             ");
-            $finaleStmt->execute([':series_desig' => $desig]);
-            $tournamentId = $finaleStmt->fetchColumn();
+            $finaleStmt->execute([':series_desig' =>$desig]);
+            $tournamentId =$finaleStmt->fetchColumn();
 
             if (!$tournamentId) continue;
 
-            $matchesStmt = $pdo->prepare("
+            $matchesStmt =$pdo->prepare("
                 SELECT m.match_designation, UPPER(m.p1_glyph_name) AS p1, UPPER(m.p2_glyph_name) AS p2,
                     COALESCE(SUM(mr.p1_final_score), 0) AS total_p1, COALESCE(SUM(mr.p2_final_score), 0) AS total_p2
                 FROM matches m
@@ -186,19 +201,19 @@
                 WHERE m.tournament_id = :tournament_id
                 GROUP BY m.id, m.match_designation, m.p1_glyph_name, m.p2_glyph_name
             ");
-            $matchesStmt->execute([':tournament_id' => $tournamentId]);
+            $matchesStmt->execute([':tournament_id' =>$tournamentId]);
             
-            foreach ($matchesStmt->fetchAll(PDO::FETCH_ASSOC) as $m) {
-                $p1 = $m['p1']; $p2 = $m['p2'];
-                if ($m['total_p1'] == $m['total_p2']) continue;
+            foreach ($matchesStmt->fetchAll(PDO::FETCH_ASSOC) as$match) {
+                $p1 =$match['p1']; $p2 =$match['p2'];
+                if ($match['total_p1'] ==$match['total_p2']) continue;
                 
-                $winner = $m['total_p1'] > $m['total_p2'] ? $p1 : $p2;
-                $loser  = $m['total_p1'] > $m['total_p2'] ? $p2 : $p1;
+                $winner = $match['total_p1'] >$match['total_p2'] ? $p1 :$p2;
+                $loser  = $match['total_p1'] >$match['total_p2'] ? $p2 :$p1;
 
                 if (!isset($medals[$winner])) $medals[$winner] = ['gold' => 0, 'silver' => 0, 'bronze' => 0];
                 if (!isset($medals[$loser]))  $medals[$loser]  = ['gold' => 0, 'silver' => 0, 'bronze' => 0];
 
-                $desigTag = strtoupper($m['match_designation']);
+                $desigTag = strtoupper($match['match_designation']);
                 if (strpos($desigTag, '1/1') !== false) {
                     $medals[$winner]['gold']++;
                     $medals[$loser]['silver']++;
@@ -210,7 +225,6 @@
     } catch (PDOException $e) {
         // Handle exception
     }
-
 ?>
 
 <!DOCTYPE html>
@@ -241,6 +255,101 @@
         .pip-rookie-label { font-size: 0.6rem; font-family: monospace; color: #888; border: 1px dashed #555; padding: 0 3px; border-radius: 2px; }
         .chevrons-wrapper { display: inline-flex; align-items: center; vertical-align: middle; margin-left: 4px; gap: 1px; }
     
+        /* detailled match and round data for the group phase modal */
+        .glyph-link {
+        color: #007bff;
+        cursor: pointer;
+        text-decoration: underline;
+        }
+        .glyph-link:hover {
+        color: #0056b3;
+        }
+
+        /* FORCE DARK CYBER THEME FOR MATCH MODAL */
+        #glyphMatchModal.modal-overlay {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            background: rgba(0, 0, 0, 0.85) !important;
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999 !important;
+        }
+
+        #glyphMatchModal .modal-content {
+            background: #0d1117 !important;
+            background-color: #0d1117 !important;
+            color: #c9d1d9 !important;
+            border: 1px solid var(--accent-green, #42f485) !important;
+            box-shadow: 0 0 25px rgba(66, 244, 133, 0.2) !important;
+            font-family: monospace !important;
+            padding: 24px !important;
+            border-radius: 6px !important;
+            width: 90% !important;
+            max-width: 620px !important;
+            max-height: 80vh !important;
+            overflow-y: auto !important;
+        }
+
+        #glyphMatchModal #modalTitle {
+            margin-top: 0 !important;
+            margin-bottom: 18px !important;
+            font-size: 1.05rem !important;
+            color: var(--accent-green, #42f485) !important;
+            letter-spacing: 1px !important;
+            text-transform: uppercase !important;
+            border-bottom: 1px dashed rgba(66, 244, 133, 0.3) !important;
+            padding-bottom: 8px !important;
+        }
+
+        #glyphMatchModal .close-modal {
+            position: absolute !important;
+            right: 16px !important;
+            top: 12px !important;
+            font-size: 22px !important;
+            cursor: pointer !important;
+            color: #8b949e !important;
+        }
+
+        #glyphMatchModal .close-modal:hover {
+            color: #ef4444 !important;
+        }
+
+        #glyphMatchModal .match-card {
+            background: rgba(255, 255, 255, 0.04) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            margin-bottom: 12px !important;
+            padding: 12px !important;
+            border-radius: 4px !important;
+            color: #e6edf3 !important;
+        }
+
+        #glyphMatchModal .match-card strong {
+            color: #f4d042 !important;
+        }
+
+        #glyphMatchModal .match-card em {
+            color: var(--accent-green, #42f485) !important;
+            font-style: normal;
+        }
+
+        #glyphMatchModal .round-list {
+            margin-top: 8px !important;
+            margin-bottom: 0 !important;
+            padding-left: 20px !important;
+            font-size: 0.85em !important;
+            color: #8b949e !important;
+            line-height: 1.6 !important;
+        }
+
+        #glyphMatchModal .round-list li {
+            margin-bottom: 2px !important;
+        }
+
     </style>
 </head>
 <body>
@@ -779,6 +888,17 @@
 
     </div>
 
+    <!-- Match Details Modal -->
+    <div id="glyphMatchModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+        <span class="close-modal" onclick="closeGlyphModal()">&times;</span>
+        <h3 id="modalTitle">Match History</h3>
+        <div id="modalBody">
+        <!-- Match details dynamically inserted here -->
+        </div>
+    </div>
+    </div>
+
     <script>
 
         let firstDraw = null;
@@ -883,9 +1003,15 @@
                         // Populate Group Table
                         if (tbody) {
                             const rowClass = rank <= 3 ? 'row-advance' : (rank <= 7 ? 'row-redemption' : 'row-pruned');
+                            const modeSuffix = getModeBadge(p.MODE); // Extract mode badge
+
+                            // Wrap the glyph name inside <span class="glyph-link" ...>
+                            const glyphClickable = `<span class="glyph-link" data-glyph="${p.glyph_name}" data-tournament-id="${p.tournament_id}">${p.glyph_name}</span>`;
+
                             tbody.insertAdjacentHTML('beforeend', `
                                 <tr class="${rowClass}">
-                                    <td>0${rank}</td><td>${p.glyph_name}</td>
+                                    <td>0${rank}</td>
+                                    <td>${glyphClickable}${modeSuffix}</td>
                                     <td style="text-align: right;">${p.total_score}</td>
                                 </tr>
                             `);
@@ -920,30 +1046,30 @@
 
                 Object.keys(groups).forEach(groupLetter => {
 
-                    let c = groupLetter.charCodeAt(0) - 65; // this maps the group letters A through D to integers 0 to 3
-                    for (let i = 0; i < 3; i++){
+                    let c = groupLetter.charCodeAt(0) - 65; // maps A-D to 0-3
+                    for (let i = 0; i < 3; i++) {
+                        const match = groups[groupLetter] ? groups[groupLetter][i] : null;
+                        if (!match) continue;
 
-                        let g1 = groups[groupLetter][i].p1_glyph_name;
-                        let g2 = groups[groupLetter][i].p2_glyph_name;
-                        let p1 = groups[groupLetter][i].total_p1;
-                        let p2 = groups[groupLetter][i].total_p2;
+                        let g1 = match.p1_glyph_name + getModeBadge(match.p1_mode);
+                        let g2 = match.p2_glyph_name + getModeBadge(match.p2_mode);
+                        let p1 = match.total_p1;
+                        let p2 = match.total_p2;
 
                         const targetSlot1 = document.querySelectorAll('.matchup-slot')[2*i + c*6];
                         const targetSlot2 = document.querySelectorAll('.matchup-slot')[2*i + 1 + c*6];
 
                         if (targetSlot1 && targetSlot2) {
-                            targetSlot1.innerHTML = `<span>${g1}</span><span class="score">${p1}</span>`;
-                            targetSlot2.innerHTML = `<span>${g2}</span><span class="score">${p2}</span>`;
-                            if (p1 > p2){ 
+                            targetSlot1.innerHTML = `<span>${g1}</span><span class="score">${p1 ?? '--'}</span>`;
+                            targetSlot2.innerHTML = `<span>${g2}</span><span class="score">${p2 ?? '--'}</span>`;
+                            if (p1 > p2) { 
                                 targetSlot1.style.borderLeft = "2px solid var(--accent-green)"; 
                                 targetSlot2.style.borderLeft = "2px solid #f44242";
-                            }
-                            else{ 
+                            } else { 
                                 targetSlot1.style.borderLeft = "2px solid #f44242";
                                 targetSlot2.style.borderLeft = "2px solid var(--accent-green)"; 
                             }
                         }
-
                     }
 
                 });                
@@ -962,8 +1088,11 @@
                     const slots = matchCard.querySelectorAll('.matchup-slot');
                     if (slots.length < 2) return;
 
+                    const p1Name = match.p1_glyph_name + getModeBadge(match.p1_mode);
+                    const p2Name = match.p2_glyph_name + getModeBadge(match.p2_mode);
+
                     // 2. Populate Player 1
-                    slots[0].innerHTML = `<span>${match.p1_glyph_name}</span><span class="score">${match.total_p1}</span>`;
+                    slots[0].innerHTML = `<span>${p1Name}</span><span class="score">${match.total_p1}</span>`;
                     if (parseInt(match.p1_win) === 1) {
                         slots[0].classList.add('winner-highlight');
                     } else {
@@ -971,7 +1100,7 @@
                     }
 
                     // 3. Populate Player 2
-                    slots[1].innerHTML = `<span>${match.p2_glyph_name}</span><span class="score">${match.total_p2}</span>`;
+                    slots[1].innerHTML = `<span>${p2Name}</span><span class="score">${match.total_p2}</span>`;
                     if (parseInt(match.p2_win) === 1) {
                         slots[1].style.borderLeft = "2px solid var(--accent-green)"; 
                         slots[0].style.borderLeft = "2px solid #f44242";
@@ -986,9 +1115,14 @@
                 if (grandFinal) {
                     const podium = document.getElementById('weekly-champion-podium');
                     if (podium) {
-                        podium.textContent = parseInt(grandFinal.p1_win) === 1 
+                        const winnerName = parseInt(grandFinal.p1_win) === 1 
                             ? grandFinal.p1_glyph_name 
                             : grandFinal.p2_glyph_name;
+                        const winnerMode = parseInt(grandFinal.p1_win) === 1 
+                            ? grandFinal.p1_mode 
+                            : grandFinal.p2_mode;
+
+                        podium.textContent = winnerName + getModeBadge(winnerMode);
                     }
                 }
             }
@@ -1082,6 +1216,97 @@
                 start: formatDate(startOfWeek),
                 end: formatDate(endOfWeek)
             };
+        }
+
+        function getModeBadge(mode) {
+            if (!mode) return '';
+            const m = mode.trim().toUpperCase();
+            if (m === 'BALANCED' || m === 'B') return ' (B)';
+            if (m === 'OFFENSIVE' || m === 'O') return ' (O)';
+            if (m === 'DEFENSIVE' || m === 'D') return ' (D)';
+            return '';
+        }
+
+        document.addEventListener('click', function(e) {
+            const link = e.target.closest('.glyph-link');
+            if (link) {
+                const glyph = link.getAttribute('data-glyph');
+                const tournamentId = link.getAttribute('data-tournament-id');
+                openGlyphModal(glyph, tournamentId);
+            }
+        });
+
+    function openGlyphModal(glyph, tournamentId) {
+        const modal = document.getElementById('glyphMatchModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalBody = document.getElementById('modalBody');
+
+        const seriesId = getURLParameter('series_id') || <?php echo json_encode($series_id); ?>;
+
+        modalTitle.innerText = `Matches for ${glyph} (Tournament #${tournamentId})`;
+        modalBody.innerHTML = '<p>Loading match data...</p>';
+        modal.style.display = 'flex';
+
+        // Preferred JS approach
+        const params = new URLSearchParams({
+            tournament_id: tournamentId,
+            glyph: glyph // e.g. "STOCHASTIC JELLYFISH"
+        });
+
+        fetch(`php/get_glyph_matches.php?${params.toString()}`)
+            .then(async response => {
+                const text = await response.text();
+                console.log('HTTP Status:', response.status);
+                console.log('Raw Server Response:', text);
+
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    throw new Error(`Invalid JSON response: ${text}`);
+                }
+            })
+            .then(data => {
+                console.log('Parsed JSON Data:', data);
+
+                if (!data.success || !data.matches || data.matches.length === 0) {
+                    modalBody.innerHTML = '<p>No matches found for this Glyph in this tournament.</p>';
+                    return;
+                }
+
+                let html = '';
+                data.matches.forEach(m => {
+                    let totalP1 = 0;
+                    let totalP2 = 0;
+                    
+                    let roundRows = m.rounds.map(r => {
+                        totalP1 += parseInt(r.p1_score);
+                        totalP2 += parseInt(r.p2_score);
+                        return `<li>Round ${r.round}: ${m.p1} (${r.p1_score}) vs ${m.p2} (${r.p2_score})</li>`;
+                    }).join('');
+
+                    // Format names with tactical stance badges for match title
+                    const p1WithMode = m.p1 + getModeBadge(m.p1_mode);
+                    const p2WithMode = m.p2 + getModeBadge(m.p2_mode);
+
+                    html += `
+                    <div class="match-card">
+                        <strong>Match ${m.designation || '#'+m.match_id}</strong>: ${p1WithMode} <em>(${totalP1})</em> vs ${p2WithMode} <em>(${totalP2})</em>
+                        <ul class="round-list">
+                        ${roundRows || '<li>No round specifics recorded</li>'}
+                        </ul>
+                    </div>
+                    `;
+                });
+                modalBody.innerHTML = html;
+            })
+            .catch(err => {
+                modalBody.innerHTML = '<p>Error loading match history.</p>';
+                console.error('Fetch error:', err);
+            });
+    }
+
+        function closeGlyphModal() {
+        document.getElementById('glyphMatchModal').style.display = 'none';
         }
 
     </script>
