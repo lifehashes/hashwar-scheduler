@@ -99,13 +99,13 @@
                 INNER JOIN (
                     SELECT DISTINCT tournament_id, group_label 
                     FROM `series_participants` 
-                    WHERE series_id = :series_id AND phase_id = :phase_id
+                    WHERE series_id = :series_id1 AND phase_id = :phase_id1
                 ) sp ON m.tournament_id = sp.tournament_id
-                LEFT JOIN `series_participants` sp1 ON sp1.series_id = :series_id 
-                    AND sp1.phase_id = :phase_id 
+                LEFT JOIN `series_participants` sp1 ON sp1.series_id = :series_id2 
+                    AND sp1.phase_id = :phase_id2 
                     AND sp1.glyph_name = m.p1_glyph_name
-                LEFT JOIN `series_participants` sp2 ON sp2.series_id = :series_id 
-                    AND sp2.phase_id = :phase_id 
+                LEFT JOIN `series_participants` sp2 ON sp2.series_id = :series_id3 
+                    AND sp2.phase_id = :phase_id3 
                     AND sp2.glyph_name = m.p2_glyph_name
                 LEFT JOIN (
                     SELECT 
@@ -118,8 +118,12 @@
                 ORDER BY sp.group_label ASC, m.id ASC";
 
         $query =$pdo->prepare($sql);$query->execute([
-            'series_id' => $seriesId,
-            'phase_id'  => $phaseId
+            'series_id1' => $seriesId,
+            'phase_id1'  => $phaseId,
+            'series_id2' => $seriesId,
+            'phase_id2'  => $phaseId,
+            'series_id3' => $seriesId,
+            'phase_id3'  => $phaseId
         ]);
 
         return $query->fetchAll(PDO::FETCH_ASSOC);
@@ -922,9 +926,9 @@
                 document.getElementById("weekNumber").innerText = s;
 
                 if (firstDraw.length > 0){ renderGlyphPreviews(); }
-                if (phase1.length > 0){ populatePhase(1); }
-                if (phase2.length > 0){ populatePhase(2); }
-                if (phase3.length > 0){ populatePhase(3); }
+                if (phase1.length > 0){ populatePhase(1); console.log(`Phase1 data found: ${phase1}`); }
+                if (phase2.length > 0){ populatePhase(2); console.log(`Phase2 data found: ${phase2}`); }
+                if (phase3.length > 0){ populatePhase(3); console.log(`Phase3 data found: ${phase3}`); }
 
                 // Retrieve dates directly from PHP database query
                 let seriesDates = <?php echo json_encode($seriesDates); ?>;
